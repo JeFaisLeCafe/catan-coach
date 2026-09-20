@@ -19,6 +19,9 @@ dependencies = [
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.14", "mypy>=1.14"]
 
+[project.scripts]
+catan-coach = "catan_coach.cli:main"
+
 [tool.hatch.metadata]
 # Required because catanatron is a direct git reference. See docs/adr/0004.
 allow-direct-references = true

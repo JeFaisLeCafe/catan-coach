@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from pathlib import Path
 
 from catanatron import Game
 from catanatron.models.enums import Action as EngineAction
@@ -40,6 +41,10 @@ class EnginePosition:
     def legal_actions(self) -> tuple[Action, ...]:
         return tuple(Action(label) for label in self._engine_actions)
 
+    @property
+    def num_players(self) -> int:
+        return len(self._game.state.colors)
+
     def observation(self) -> Observation:
         return feature_vector(self._game, self._game.state.current_color())
 
@@ -48,3 +53,8 @@ class EnginePosition:
         clone = _copy_without_sharing_rng(self._game)
         clone.execute(self._engine_actions[action.label])
         return feature_vector(clone, actor)
+
+    def write_png(self, path: Path) -> Path:
+        from catan_coach.engine.render import write_position_png
+
+        return write_position_png(self._game, path)
