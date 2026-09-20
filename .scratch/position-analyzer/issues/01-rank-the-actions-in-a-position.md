@@ -9,7 +9,7 @@ single batched call to the model, because a Position can offer dozens of legal A
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] An Analysis lists every legal Action available in the Position, and no others
 - [x] Actions are ordered by Win Probability, best first
@@ -23,3 +23,12 @@ single batched call to the model, because a Position can offer dozens of legal A
 - [x] Ties in Win Probability are handled with a defined, documented order rather than arbitrarily
 - [x] The analyzer accepts any implementation of the existing model port, verified by running it
       against an existing Baseline as well as the stub
+
+## Comments
+
+Landed in `d7a3c01`. `analyze()` and the `Position` port live in `domain/`; `EnginePosition` in
+`engine/` is the only piece that touches catanatron. Ties break by Action label, ascending.
+
+Catanatron's `Game.copy()` shares the random stream with the original, so scoring a `ROLL` would
+have advanced the caller's dice. `EnginePosition` gives each copy its own stream, covered by
+`test_analysing_does_not_advance_the_callers_dice`.
