@@ -17,18 +17,26 @@ run of 10,000 games gives roughly 10,000 independent labels, not millions.
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] A command generates a Corpus from a requested number of games and writes it to parquet
-- [ ] Games are played with strong play, not random play, so the learned probabilities describe
+- [x] A command generates a Corpus from a requested number of games and writes it to parquet
+- [x] Games are played with strong play, not random play, so the learned probabilities describe
       good Catan
-- [ ] Each sampled Position contributes one row per Seat, each labelled with whether that Seat won
-- [ ] Every row records which game it came from, so splits can be made by game
-- [ ] The train/validation assignment is by game and is reproducible from a seed
-- [ ] Sampling frequency across Plies is configurable, so redundancy between near-identical
+- [x] Each sampled Position contributes one row per Seat, each labelled with whether that Seat won
+- [x] Every row records which game it came from, so splits can be made by game
+- [x] The train/validation assignment is by game and is reproducible from a seed
+- [x] Sampling frequency across Plies is configurable, so redundancy between near-identical
       consecutive Positions can be reduced
-- [ ] Generation runs across multiple cores
-- [ ] An interrupted run can be resumed without discarding completed games
-- [ ] Games that fail to terminate are dropped and counted, not silently included
-- [ ] A summary reports games played, rows written, and the observed win rate per Seat
-- [ ] Verified end to end on a small run in the test suite, marked as engine-touching
+- [x] Generation runs across multiple cores
+- [x] An interrupted run can be resumed without discarding completed games
+- [x] Games that fail to terminate are dropped and counted, not silently included
+- [x] A summary reports games played, rows written, and the observed win rate per Seat
+- [x] Verified end to end on a small run in the test suite, marked as engine-touching
+
+## Comments
+
+`uv run catan-coach corpus --games N --out DIR` plays `ValueFunctionPlayer` games and writes one
+parquet file per finished game under `DIR/games/`. Split assignment is `split_for_game` in
+`domain/`; sampling and I/O live in `engine/corpus.py`. Each game is persisted as soon as it
+finishes, so a crash keeps already-written games. Dropped games (hitting the engine turn limit)
+are marker files under `DIR/dropped/`, counted in the summary, and skipped on resume.
