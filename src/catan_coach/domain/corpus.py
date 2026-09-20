@@ -28,6 +28,10 @@ class Corpus:
     won: NDArray[np.float64]
     observations: NDArray[np.float64]
 
+    @property
+    def n_games(self) -> int:
+        return int(np.unique(self.game_ids).size)
+
 
 @dataclass(frozen=True, slots=True)
 class CorpusSummary:

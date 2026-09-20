@@ -9,11 +9,14 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from catan_coach.domain.analysis import Analysis
-from catan_coach.domain.corpus import DEFAULT_VALIDATION_FRACTION, format_summary
+from catan_coach.domain.corpus import DEFAULT_VALIDATION_FRACTION, Corpus, format_summary
+from catan_coach.domain.prediction import WinProbabilityModel
 
 _ANALYZE = "analyze"
 _CORPUS = "corpus"
-_SUBCOMMANDS = {_ANALYZE, _CORPUS}
+_TRAIN = "train"
+_REPORT = "report"
+_SUBCOMMANDS = {_ANALYZE, _CORPUS, _TRAIN, _REPORT}
 
 
 def format_analysis(analysis: Analysis, model_name: str, png_path: Path) -> str:
@@ -66,9 +69,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=DEFAULT_VALIDATION_FRACTION,
     )
 
+    train_parser = subparsers.add_parser(_TRAIN, help="train a Win Probability model on a Corpus")
+    train_parser.add_argument("--corpus", type=Path, required=True)
+    train_parser.add_argument("--out", type=Path, required=True)
+    train_parser.add_argument("--seed", type=int, default=0)
+
+    report_parser = subparsers.add_parser(_REPORT, help="report a model against the Baselines")
+    report_parser.add_argument("--corpus", type=Path, required=True)
+    report_parser.add_argument("--model", type=Path, required=True)
+
     args = parser.parse_args(args_list)
     if args.command == _CORPUS:
         return _run_corpus(args)
+    if args.command == _TRAIN:
+        return _run_train(args)
+    if args.command == _REPORT:
+        return _run_report(args)
     return _run_analyze(args)
 
 
@@ -110,3 +126,61 @@ def _run_corpus(args: argparse.Namespace) -> int:
     )
     print(format_summary(summary))
     return 0
+
+
+def _run_train(args: argparse.Namespace) -> int:
+    from catan_coach.engine.corpus import read_corpus
+    from catan_coach.models.gbdt import GbdtModel
+    from catan_coach.models.train import train
+
+    try:
+        corpus = read_corpus(args.corpus)
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return 1
+
+    model = train(corpus, seed=args.seed)
+    model.save(args.out)
+    print(f"Wrote {args.out}")
+    return _print_comparison(corpus, GbdtModel.load(args.out), args.corpus)
+
+
+def _run_report(args: argparse.Namespace) -> int:
+    from catan_coach.engine.corpus import read_corpus
+    from catan_coach.models.gbdt import GbdtModel
+
+    if not args.model.is_file():
+        print(f"No trained model at {args.model}", file=sys.stderr)
+        return 1
+    try:
+        corpus = read_corpus(args.corpus)
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return 1
+    return _print_comparison(corpus, GbdtModel.load(args.model), args.corpus)
+
+
+def _print_comparison(corpus: Corpus, model: WinProbabilityModel, corpus_path: Path) -> int:
+    from catan_coach.engine.features import public_vp_indices
+    from catan_coach.models.baselines import ConstantModel, VictoryPointShareModel
+    from catan_coach.models.train import compare_to_baselines, format_comparison
+
+    n_players = len({str(seat) for seat in corpus.seats})
+    try:
+        comparison = compare_to_baselines(
+            model,
+            corpus,
+            constant=ConstantModel(n_players),
+            vp_share=VictoryPointShareModel(public_vp_indices(n_players)),
+        )
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return 1
+    print(format_comparison(comparison, corpus_path=str(corpus_path), n_games=corpus.n_games))
+    if (
+        comparison.beats_constant
+        and comparison.beats_vp_share
+        and comparison.ece_better_than_vp_share
+    ):
+        return 0
+    return 1

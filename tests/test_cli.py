@@ -119,3 +119,46 @@ def test_the_corpus_command_writes_parquet_and_prints_a_summary(
 
     corpus = read_corpus(out)
     assert corpus.observations.shape[0] == 4
+
+
+@pytest.mark.engine
+def test_the_train_command_writes_a_model_and_reports_baselines(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    from catan_coach.engine.corpus import generate_corpus
+
+    corpus_dir = tmp_path / "corpus"
+    model_path = tmp_path / "model.txt"
+    generate_corpus(corpus_dir, n_games=2, ply_stride=10_000, seed=0, workers=1)
+
+    code = main(["train", "--corpus", str(corpus_dir), "--out", str(model_path), "--seed", "0"])
+    captured = capsys.readouterr()
+
+    assert model_path.is_file()
+    assert "Wrote" in captured.out
+    assert str(corpus_dir) in captured.out
+    assert "games: 2" in captured.out
+    assert "constant(1/4)" in captured.out
+    assert "vp-share" in captured.out
+    assert "brier" in captured.out.lower()
+    assert "ece" in captured.out.lower()
+    assert "does not beat" in captured.out or "beats" in captured.out
+    assert code in (0, 1)
+    assert "Traceback" not in captured.err
+
+    capsys.readouterr()
+    report_code = main(["report", "--corpus", str(corpus_dir), "--model", str(model_path)])
+    report = capsys.readouterr()
+    assert report_code == code
+    assert "constant(1/4)" in report.out
+
+
+def test_a_missing_trained_model_is_a_readable_error(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    code = main(["report", "--corpus", str(tmp_path), "--model", str(tmp_path / "missing.txt")])
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert "missing.txt" in captured.err
+    assert "Traceback" not in captured.err

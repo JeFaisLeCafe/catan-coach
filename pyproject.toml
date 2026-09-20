@@ -15,6 +15,7 @@ dependencies = [
     "catanatron[gym] @ git+https://github.com/bcollazo/catanatron@ecf931181b9a65bb4116a2153fb78c16f1438e00",
     "numpy>=2.0",
     "pandas>=2.0",
+    "lightgbm>=4.0",
 ]
 
 [dependency-groups]
@@ -48,5 +49,5 @@ strict = true
 files = ["src", "tests"]
 
 [[tool.mypy.overrides]]
-module = ["catanatron.*"]
+module = ["catanatron.*", "lightgbm.*"]
 ignore_missing_imports = true
