@@ -40,6 +40,9 @@ class EnginePosition:
     def legal_actions(self) -> tuple[Action, ...]:
         return tuple(Action(label) for label in self._engine_actions)
 
+    def observation(self) -> Observation:
+        return feature_vector(self._game, self._game.state.current_color())
+
     def observation_after(self, action: Action) -> Observation:
         actor = self._game.state.current_color()
         clone = _copy_without_sharing_rng(self._game)
