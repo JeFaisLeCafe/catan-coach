@@ -14,10 +14,11 @@ dependencies = [
     # snapshot missing every module we depend on. See docs/adr/0004.
     "catanatron[gym] @ git+https://github.com/bcollazo/catanatron@ecf931181b9a65bb4116a2153fb78c16f1438e00",
     "numpy>=2.0",
+    "pandas>=2.0",
 ]
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.14", "mypy>=1.14"]
+dev = ["pytest>=8", "ruff>=0.14", "mypy>=1.14", "pandas-stubs>=2"]
 
 [project.scripts]
 catan-coach = "catan_coach.cli:main"

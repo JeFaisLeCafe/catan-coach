@@ -84,3 +84,38 @@ def test_the_command_prints_an_analysis_and_writes_a_png(
     assert png.name in captured.out
     assert png.is_file()
     assert png.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+@pytest.mark.engine
+def test_the_corpus_command_writes_parquet_and_prints_a_summary(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    out = tmp_path / "corpus"
+    code = main(
+        [
+            "corpus",
+            "--games",
+            "1",
+            "--out",
+            str(out),
+            "--stride",
+            "10000",
+            "--workers",
+            "1",
+            "--seed",
+            "3",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "Games played: 1" in captured.out
+    assert "Games dropped: 0" in captured.out
+    assert "Rows written: 4" in captured.out
+    assert "Win rate:" in captured.out
+    assert "Traceback" not in captured.err
+    assert (out / "games").is_dir()
+    from catan_coach.engine.corpus import read_corpus
+
+    corpus = read_corpus(out)
+    assert corpus.observations.shape[0] == 4
