@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from catan_coach.cli import format_analysis, main
-from catan_coach.domain.analysis import Analysis, RankedAction
+from catan_coach.domain.analysis import Analysis, Contribution, RankedAction
 from catan_coach.domain.position import Action, Seat
 
 
@@ -38,6 +38,50 @@ def test_a_forced_action_is_not_presented_as_a_choice() -> None:
     assert "WHITE" in text
     assert "constant(1/4)" in text
     assert "Loss" not in text
+
+
+def test_loss_is_shown_in_percentage_points_and_a_near_tie_is_named() -> None:
+    text = format_analysis(
+        Analysis(
+            seat=Seat("BLUE"),
+            ranked=(
+                RankedAction(
+                    Action("BUILD_SETTLEMENT 3"),
+                    0.410,
+                    0.0,
+                    (Contribution("hand", 0.08),),
+                ),
+                RankedAction(
+                    Action("BUILD_SETTLEMENT 7"),
+                    0.406,
+                    0.004,
+                    (Contribution("road", 0.03),),
+                ),
+            ),
+        ),
+        "gbdt",
+        Path("board.png"),
+    )
+    assert "0.4" in text  # 0.4 percentage points, not a raw 0.004
+    assert "near-tie" in text.lower()
+    assert "hand" in text
+    assert "BUILD_SETTLEMENT 3" in text
+
+
+def test_a_wide_gap_is_not_called_a_near_tie() -> None:
+    text = format_analysis(
+        Analysis(
+            seat=Seat("BLUE"),
+            ranked=(
+                RankedAction(Action("BUILD_CITY 3"), 0.50, 0.0),
+                RankedAction(Action("END_TURN"), 0.35, 0.15),
+            ),
+        ),
+        "gbdt",
+        Path("board.png"),
+    )
+    assert "15" in text
+    assert "near-tie" not in text.lower()
 
 
 @pytest.fixture(scope="module")
@@ -84,6 +128,53 @@ def test_the_command_prints_an_analysis_and_writes_a_png(
     assert png.name in captured.out
     assert png.is_file()
     assert png.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+@pytest.mark.engine
+def test_analyze_falls_back_to_vp_share_when_no_trained_model_is_present(
+    capsys: pytest.CaptureFixture[str], saved_game: Path
+) -> None:
+    code = main([str(saved_game), "0", "--model", str(saved_game.parent / "absent.txt")])
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "No trained model" in captured.err
+    assert "vp-share" in captured.out
+    assert "Traceback" not in captured.err
+
+
+@pytest.mark.engine
+def test_a_baseline_can_be_selected_explicitly(
+    capsys: pytest.CaptureFixture[str], saved_game: Path
+) -> None:
+    code = main([str(saved_game), "0", "--baseline", "constant"])
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "constant(1/4)" in captured.out
+    assert "vp-share" not in captured.out
+
+
+@pytest.mark.engine
+def test_analyze_with_a_trained_model_prints_player_reasons(
+    capsys: pytest.CaptureFixture[str], saved_game: Path, tmp_path: Path
+) -> None:
+    from catan_coach.domain.reasons import PLAYER_LABELS
+    from catan_coach.engine.corpus import generate_corpus
+
+    corpus_dir = tmp_path / "corpus"
+    model_path = tmp_path / "model.txt"
+    generate_corpus(corpus_dir, n_games=2, ply_stride=10_000, seed=0, workers=1)
+    main(["train", "--corpus", str(corpus_dir), "--out", str(model_path), "--seed", "0"])
+    capsys.readouterr()
+
+    code = main([str(saved_game), "0", "--model", str(model_path)])
+    captured = capsys.readouterr()
+
+    assert code == 0
+    assert "gbdt" in captured.out
+    assert any(label in captured.out for label in PLAYER_LABELS)
+    assert "Traceback" not in captured.err
 
 
 @pytest.mark.engine

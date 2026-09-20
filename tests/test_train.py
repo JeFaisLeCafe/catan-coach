@@ -126,6 +126,29 @@ class TestTrain:
         second = train(corpus, seed=7).predict(corpus.observations[:12])
         assert first == pytest.approx(second)
 
+    def test_explanations_use_player_recognisable_labels(self, tmp_path: Path) -> None:
+        from catan_coach.domain.reasons import PLAYER_LABELS
+        from catan_coach.models.gbdt import GbdtModel
+
+        corpus = _corpus(seed=5)
+        names = (
+            "P0_PUBLIC_VPS",
+            "P1_PUBLIC_VPS",
+            "P2_PUBLIC_VPS",
+            "P3_PUBLIC_VPS",
+            "TILE0_PROBA",
+            "TILE1_PROBA",
+            "P0_WHEAT_IN_HAND",
+            "P0_HAS_ARMY",
+        )
+        path = tmp_path / "model.txt"
+        train(corpus, seed=5).save(path)
+        reasons = GbdtModel.load(path, feature_names=names).explain(corpus.observations[:3])
+
+        assert len(reasons) == 3
+        for group in reasons:
+            assert {item.label for item in group} <= set(PLAYER_LABELS)
+
 
 def test_n_games_counts_games_not_rows() -> None:
     corpus = _corpus(train_games=3, val_games=2)

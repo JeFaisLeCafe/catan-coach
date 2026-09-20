@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Protocol, runtime_checkable
 
 import numpy as np
 
 from catan_coach.domain.position import Action, Position, Seat
-from catan_coach.domain.prediction import WinProbabilityModel
+from catan_coach.domain.prediction import FeatureMatrix, WinProbabilityModel
+
+
+@dataclass(frozen=True, slots=True)
+class Contribution:
+    label: str
+    delta: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,6 +22,7 @@ class RankedAction:
     action: Action
     win_probability: float
     loss: float
+    reasons: tuple[Contribution, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,6 +35,11 @@ class Analysis:
         return len(self.ranked) == 1
 
 
+@runtime_checkable
+class ExplainingModel(WinProbabilityModel, Protocol):
+    def explain(self, features: FeatureMatrix) -> tuple[tuple[Contribution, ...], ...]: ...
+
+
 def analyze(position: Position, model: WinProbabilityModel) -> Analysis:
     """Score every legal Action in one batched call to `model`.
 
@@ -36,15 +49,29 @@ def analyze(position: Position, model: WinProbabilityModel) -> Analysis:
     actions = position.legal_actions()
     observations = np.vstack([position.observation_after(action) for action in actions])
     win_probabilities = model.predict(observations)
-    best = float(np.max(win_probabilities))
+    explanations: tuple[tuple[Contribution, ...], ...]
+    if isinstance(model, ExplainingModel):
+        explanations = model.explain(observations)
+        if len(explanations) != len(actions):
+            raise ValueError("explain() must return one reason list per Action")
+    else:
+        explanations = tuple(() for _ in actions)
+    by_label = {
+        action.label: (float(probability), reasons)
+        for action, probability, reasons in zip(
+            actions, win_probabilities, explanations, strict=True
+        )
+    }
+    best = max(probability for probability, _ in by_label.values())
     ranked = sorted(
         (
             RankedAction(
                 action=action,
-                win_probability=float(probability),
-                loss=best - float(probability),
+                win_probability=by_label[action.label][0],
+                loss=best - by_label[action.label][0],
+                reasons=by_label[action.label][1],
             )
-            for action, probability in zip(actions, win_probabilities, strict=True)
+            for action in actions
         ),
         key=lambda row: (-row.win_probability, row.action.label),
     )

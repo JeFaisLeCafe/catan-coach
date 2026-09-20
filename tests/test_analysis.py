@@ -3,9 +3,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from catan_coach.domain.analysis import analyze
+from catan_coach.domain.analysis import Contribution, analyze
 from catan_coach.domain.position import Action, Seat
 from catan_coach.domain.prediction import FeatureMatrix, Probabilities, WinProbabilityModel
+from catan_coach.domain.reasons import PLAYER_LABELS
 from catan_coach.models.baselines import ConstantModel
 
 SETTLE_PORT = Action("BUILD_SETTLEMENT 3")
@@ -147,3 +148,29 @@ class TestAnalyze:
         ]
         assert [row.win_probability for row in analysis.ranked] == pytest.approx([0.25, 0.25, 0.25])
         assert [row.loss for row in analysis.ranked] == pytest.approx([0.0, 0.0, 0.0])
+
+
+class ExplainingStub(StubModel):
+    def explain(self, features: FeatureMatrix) -> tuple[tuple[Contribution, ...], ...]:
+        matrix = np.asarray(features, dtype=np.float64)
+        reason = (Contribution("hand", 0.12), Contribution("road", -0.04))
+        return tuple(reason for _ in matrix)
+
+
+class TestAnalyzeExplains:
+    def test_an_explaining_model_attaches_labelled_reasons(self) -> None:
+        position, _ = three_action_choice()
+        model = ExplainingStub({(1.0,): 0.40, (2.0,): 0.55, (3.0,): 0.20})
+
+        analysis = analyze(position, model)
+
+        for row in analysis.ranked:
+            assert row.reasons
+            assert all(reason.label in set(PLAYER_LABELS) for reason in row.reasons)
+
+    def test_a_baseline_carries_no_reasons(self) -> None:
+        position, model = three_action_choice()
+
+        analysis = analyze(position, model)
+
+        assert all(row.reasons == () for row in analysis.ranked)

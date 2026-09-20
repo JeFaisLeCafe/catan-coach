@@ -19,6 +19,9 @@ _REPORT = "report"
 _SUBCOMMANDS = {_ANALYZE, _CORPUS, _TRAIN, _REPORT}
 
 
+_NEAR_TIE_LOSS = 0.01
+
+
 def format_analysis(analysis: Analysis, model_name: str, png_path: Path) -> str:
     lines = [
         f"Model: {model_name}",
@@ -35,12 +38,25 @@ def format_analysis(analysis: Analysis, model_name: str, png_path: Path) -> str:
             ]
         )
     else:
-        lines.append(f"{'Action':<40} {'Win Probability':>16} {'Loss':>8}")
-        lines.extend(
-            f"{row.action.label:<40} {row.win_probability:>16.3f} {row.loss:>8.3f}"
-            for row in analysis.ranked
-        )
+        lines.append(f"{'Action':<40} {'Win Probability':>16} {'Loss (pp)':>10}")
+        for row in analysis.ranked:
+            line = f"{row.action.label:<40} {row.win_probability:>16.3f} {row.loss * 100:>10.1f}"
+            if row.reasons:
+                labels = ", ".join(
+                    f"{reason.label} {reason.delta * 100:+.1f}" for reason in row.reasons
+                )
+                line = f"{line}  {labels}"
+            lines.append(line)
         lines.append("")
+        if len(analysis.ranked) > 1:
+            lead = analysis.ranked[1].loss * 100
+            if analysis.ranked[1].loss <= _NEAR_TIE_LOSS:
+                lines.append(
+                    f"The top Action leads by {lead:.1f} points of Win Probability (near-tie)."
+                )
+            else:
+                lines.append(f"The top Action leads by {lead:.1f} points of Win Probability.")
+            lines.append("")
     lines.append(f"Position written to {png_path}")
     return "\n".join(lines)
 
@@ -56,6 +72,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     analyze_parser = subparsers.add_parser(_ANALYZE, help="rank Actions in a saved game at a Ply")
     analyze_parser.add_argument("game", type=Path)
     analyze_parser.add_argument("ply", type=int)
+    analyze_parser.add_argument(
+        "--model",
+        type=Path,
+        default=Path("model.txt"),
+        help="trained model to use when --baseline is not set",
+    )
+    analyze_parser.add_argument(
+        "--baseline",
+        choices=("vp-share", "constant"),
+        help="score with a Baseline instead of the trained model",
+    )
 
     corpus_parser = subparsers.add_parser(_CORPUS, help="generate a Corpus of self-play games")
     corpus_parser.add_argument("--games", type=int, required=True)
@@ -95,9 +122,10 @@ def _run_analyze(args: argparse.Namespace) -> int:
         return 1
 
     from catan_coach.domain.analysis import analyze
-    from catan_coach.engine.features import public_vp_indices
+    from catan_coach.engine.features import feature_names, public_vp_indices
     from catan_coach.engine.persist import position_at_ply, read_game
-    from catan_coach.models.baselines import VictoryPointShareModel
+    from catan_coach.models.baselines import ConstantModel, VictoryPointShareModel
+    from catan_coach.models.gbdt import GbdtModel
 
     try:
         position = position_at_ply(read_game(path), args.ply)
@@ -105,7 +133,17 @@ def _run_analyze(args: argparse.Namespace) -> int:
         print(error, file=sys.stderr)
         return 1
 
-    model = VictoryPointShareModel(public_vp_indices(position.num_players))
+    n_players = position.num_players
+    if args.baseline == "constant":
+        model: WinProbabilityModel = ConstantModel(n_players)
+    elif args.baseline == "vp-share":
+        model = VictoryPointShareModel(public_vp_indices(n_players))
+    elif args.model.is_file():
+        model = GbdtModel.load(args.model, feature_names=feature_names(n_players))
+    else:
+        print(f"No trained model at {args.model}; using vp-share", file=sys.stderr)
+        model = VictoryPointShareModel(public_vp_indices(n_players))
+
     analysis = analyze(position, model)
     png_path = path.with_name(f"{path.stem}-ply-{args.ply}.png")
     position.write_png(png_path)
