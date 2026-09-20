@@ -11,15 +11,15 @@ single batched call to the model, because a Position can offer dozens of legal A
 
 **Status:** ready-for-agent
 
-- [ ] An Analysis lists every legal Action available in the Position, and no others
-- [ ] Actions are ordered by Win Probability, best first
-- [ ] Each Action carries its Loss against the best Action; the best Action's Loss is zero
-- [ ] The model is consulted once for the whole Position, not once per Action
-- [ ] A Position offering a single legal Action produces an Analysis that says so, rather than a
+- [x] An Analysis lists every legal Action available in the Position, and no others
+- [x] Actions are ordered by Win Probability, best first
+- [x] Each Action carries its Loss against the best Action; the best Action's Loss is zero
+- [x] The model is consulted once for the whole Position, not once per Action
+- [x] A Position offering a single legal Action produces an Analysis that says so, rather than a
       one-row ranking presented as a choice
-- [ ] Analysing a Position does not mutate it; the caller's Position is unchanged afterwards
-- [ ] Tests drive the analyzer with a stub Win Probability model returning hand-written numbers, so
+- [x] Analysing a Position does not mutate it; the caller's Position is unchanged afterwards
+- [x] Tests drive the analyzer with a stub Win Probability model returning hand-written numbers, so
       ordering, Loss arithmetic and ties are asserted exactly with no dice randomness
-- [ ] Ties in Win Probability are handled with a defined, documented order rather than arbitrarily
-- [ ] The analyzer accepts any implementation of the existing model port, verified by running it
+- [x] Ties in Win Probability are handled with a defined, documented order rather than arbitrarily
+- [x] The analyzer accepts any implementation of the existing model port, verified by running it
       against an existing Baseline as well as the stub

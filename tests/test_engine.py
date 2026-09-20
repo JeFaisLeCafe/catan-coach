@@ -9,7 +9,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from catan_coach.domain.analysis import analyze
 from catan_coach.domain.calibration import brier_skill_score, calibration_report
+from catan_coach.domain.position import Position
 from catan_coach.engine.features import (
     feature_matrix,
     feature_names,
@@ -17,6 +19,7 @@ from catan_coach.engine.features import (
     index_of,
     public_vp_indices,
 )
+from catan_coach.engine.position import EnginePosition, action_label
 from catan_coach.models.baselines import ConstantModel, VictoryPointShareModel
 
 Corpus = tuple[np.ndarray, np.ndarray]
@@ -26,6 +29,8 @@ pytestmark = pytest.mark.engine
 catanatron = pytest.importorskip("catanatron")
 
 from catanatron import Color, Game  # noqa: E402
+from catanatron.models.enums import ActionType  # noqa: E402
+from catanatron.models.player import SimplePlayer  # noqa: E402
 from catanatron.players.value import ValueFunctionPlayer  # noqa: E402
 
 COLORS = (Color.RED, Color.BLUE, Color.WHITE, Color.ORANGE)
@@ -194,3 +199,60 @@ class TestBaselinesOnRealPositions:
             VictoryPointShareModel(public_vp_indices(4)).predict(features), outcomes
         )
         assert len(report.populated_bins) > 3
+
+
+def opening_position() -> tuple[Game, EnginePosition]:
+    game = Game([SimplePlayer(c) for c in COLORS], seed=1)
+    return game, EnginePosition(game)
+
+
+class TestAnalyzerOnRealPositions:
+    def test_a_baseline_ranks_every_legal_action(self) -> None:
+        game, position = opening_position()
+        original_actions = list(game.playable_actions)
+        assert isinstance(position, Position)
+
+        analysis = analyze(position, VictoryPointShareModel(public_vp_indices(NUM_PLAYERS)))
+
+        assert {row.action.label for row in analysis.ranked} == {
+            action_label(action) for action in game.playable_actions
+        }
+        assert len(analysis.ranked) == len(game.playable_actions)
+        assert analysis.seat.name == game.state.current_color().name
+        assert analysis.ranked[0].loss == pytest.approx(0.0)
+        win_probabilities = [row.win_probability for row in analysis.ranked]
+        assert win_probabilities == sorted(win_probabilities, reverse=True)
+        assert game.playable_actions == original_actions
+
+    def test_observation_after_an_action_is_taken_from_the_resulting_position(self) -> None:
+        game, position = opening_position()
+        actor = game.state.current_color()
+        before = feature_vector(game, actor)
+        action = position.legal_actions()[0]
+
+        after = position.observation_after(action)
+
+        assert not np.array_equal(before, after)
+        assert (
+            after[index_of("P0_SETTLEMENTS_LEFT", NUM_PLAYERS)]
+            == before[index_of("P0_SETTLEMENTS_LEFT", NUM_PLAYERS)] - 1
+        )
+        assert np.array_equal(feature_vector(game, actor), before)
+
+    def test_analysing_does_not_advance_the_callers_dice(self) -> None:
+        game = Game([SimplePlayer(c) for c in COLORS], seed=1)
+        for _ in range(32):
+            if ActionType.ROLL in {action.action_type for action in game.playable_actions}:
+                break
+            game.play_tick()
+        else:
+            pytest.fail("never reached a ROLL Action")
+        rng_before = game.state.random.getstate()
+        playable_before = list(game.playable_actions)
+
+        analysis = analyze(EnginePosition(game), ConstantModel(NUM_PLAYERS))
+
+        assert game.state.random.getstate() == rng_before
+        assert game.playable_actions == playable_before
+        assert analysis.is_forced
+        assert analysis.ranked[0].action.label == "ROLL"
