@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "catan-coach"
+version = "0.1.0"
+description = "Win-probability analyzer for Settlers of Catan positions"
+requires-python = ">=3.11"
+# Derivative of catanatron, which is GPL-3.0-or-later. See docs/adr/0003.
+license = "GPL-3.0-or-later"
+dependencies = [
+    # Pinned to a git SHA, not a PyPI release. PyPI's catanatron is a 2022
+    # snapshot missing every module we depend on. See docs/adr/0004.
+    "catanatron[gym] @ git+https://github.com/bcollazo/catanatron@ecf931181b9a65bb4116a2153fb78c16f1438e00",
+    "numpy>=2.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.14", "mypy>=1.14"]
+
+[tool.hatch.metadata]
+# Required because catanatron is a direct git reference. See docs/adr/0004.
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/catan_coach"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = ["engine: requires the catanatron engine (slower)"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["catanatron.*"]
+ignore_missing_imports = true
