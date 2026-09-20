@@ -10,17 +10,24 @@ is trained.
 
 **Blocked by:** 01 (Rank the Actions in a Position), 02 (Load a Position at a chosen Ply)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] A single command takes a saved game and a Ply and prints the ranked Actions with Win
+- [x] A single command takes a saved game and a Ply and prints the ranked Actions with Win
       Probability and Loss
-- [ ] The same command writes a PNG of the Position and reports where it was written
-- [ ] Rendering is headless: no window opens and the command works over SSH or in CI
-- [ ] Which model produced the numbers is stated in the output, so Baseline results are never
+- [x] The same command writes a PNG of the Position and reports where it was written
+- [x] Rendering is headless: no window opens and the command works over SSH or in CI
+- [x] Which model produced the numbers is stated in the output, so Baseline results are never
       mistaken for trained ones
-- [ ] The output makes clear which Seat the Win Probability refers to
-- [ ] A Position with one legal Action reports that rather than printing a one-row table
-- [ ] Invalid input — a missing file, an out-of-range Ply — produces a readable error, not a
+- [x] The output makes clear which Seat the Win Probability refers to
+- [x] A Position with one legal Action reports that rather than printing a one-row table
+- [x] Invalid input — a missing file, an out-of-range Ply — produces a readable error, not a
       traceback
-- [ ] The command holds no analysis logic of its own; it wires together existing pieces
-- [ ] Covered by a smoke test asserting the command runs and produces both outputs
+- [x] The command holds no analysis logic of its own; it wires together existing pieces
+- [x] Covered by a smoke test asserting the command runs and produces both outputs
+
+## Comments
+
+`uv run catan-coach GAME.json PLY` (also `python -m catan_coach`). The CLI calls `analyze`,
+`position_at_ply`, and `EnginePosition.write_png`; it uses `vp-share` so the numbers are a
+Baseline. Forced Positions print "not a choice" instead of a one-row table. SDL is forced to
+the dummy video driver so rendering stays headless.
