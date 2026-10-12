@@ -67,3 +67,32 @@ _Avoid_: dataset, training data
 
 **Baseline**:
 A deliberately simple model that a real model must beat before it is believed.
+
+### Playing and recording
+
+**Challenge Mode**:
+Live play with Analysis hidden. The completed game can still be reviewed afterward.
+
+**Coach Mode**:
+Live play with Analysis visible. A game may switch between Challenge Mode and Coach Mode
+without changing its Position or history.
+
+**Table Recorder**:
+A local game where one operator enters the Actions and random outcomes for every Seat, mirroring
+a physical game rather than asking the engine to choose those outcomes.
+_Avoid_: solo mode (ambiguous with one player against bots), hot-seat mode (usually means several
+people sharing one device)
+
+### Thinking
+
+**Search Budget**:
+The computation an Analysis may spend, expressed as elapsed time or simulations. Unlike a
+Presentation Delay, more Search Budget can improve the Analysis.
+
+**Progressive Analysis**:
+An Analysis published immediately and then revised as more Search Budget is spent. It stops when
+its Position changes, its time budget expires, or the player stops it.
+
+**Presentation Delay**:
+A minimum visual pause before showing a completed bot Action. It performs no computation and does
+not improve an Analysis.
