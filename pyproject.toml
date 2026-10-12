@@ -12,7 +12,7 @@ license = "GPL-3.0-or-later"
 dependencies = [
     # Pinned to a git SHA, not a PyPI release. PyPI's catanatron is a 2022
     # snapshot missing every module we depend on. See docs/adr/0004.
-    "catanatron[gym] @ git+https://github.com/bcollazo/catanatron@ecf931181b9a65bb4116a2153fb78c16f1438e00",
+    "catanatron[gym,web] @ git+https://github.com/bcollazo/catanatron@ecf931181b9a65bb4116a2153fb78c16f1438e00",
     "numpy>=2.0",
     "pandas>=2.0",
     "lightgbm>=4.0",

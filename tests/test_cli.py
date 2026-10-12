@@ -11,6 +11,23 @@ from catan_coach.domain.analysis import Analysis, Contribution, RankedAction
 from catan_coach.domain.position import Action, Seat
 
 
+def test_play_starts_the_local_browser_server(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    called: dict[str, object] = {}
+
+    def fake_run_local_server(*, host: str, port: int, open_browser: bool) -> None:
+        called.update(host=host, port=port, open_browser=open_browser)
+
+    monkeypatch.setattr(
+        "catan_coach.engine.web.run_local_server",
+        fake_run_local_server,
+    )
+
+    assert main(["play", "--host", "127.0.0.1", "--port", "5432", "--no-browser"]) == 0
+    assert called == {"host": "127.0.0.1", "port": 5432, "open_browser": False}
+
+
 def test_a_missing_game_file_is_a_readable_error(
     capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:

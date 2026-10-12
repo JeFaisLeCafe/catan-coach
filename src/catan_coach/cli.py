@@ -16,7 +16,8 @@ _ANALYZE = "analyze"
 _CORPUS = "corpus"
 _TRAIN = "train"
 _REPORT = "report"
-_SUBCOMMANDS = {_ANALYZE, _CORPUS, _TRAIN, _REPORT}
+_PLAY = "play"
+_SUBCOMMANDS = {_ANALYZE, _CORPUS, _TRAIN, _REPORT, _PLAY}
 
 
 _NEAR_TIE_LOSS = 0.01
@@ -105,6 +106,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     report_parser.add_argument("--corpus", type=Path, required=True)
     report_parser.add_argument("--model", type=Path, required=True)
 
+    play_parser = subparsers.add_parser(_PLAY, help="play Catan in a local browser")
+    play_parser.add_argument("--host", default="127.0.0.1")
+    play_parser.add_argument("--port", type=int, default=5001)
+    play_parser.add_argument("--no-browser", action="store_true")
+
     args = parser.parse_args(args_list)
     if args.command == _CORPUS:
         return _run_corpus(args)
@@ -112,6 +118,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_train(args)
     if args.command == _REPORT:
         return _run_report(args)
+    if args.command == _PLAY:
+        return _run_play(args)
     return _run_analyze(args)
 
 
@@ -148,6 +156,21 @@ def _run_analyze(args: argparse.Namespace) -> int:
     png_path = path.with_name(f"{path.stem}-ply-{args.ply}.png")
     position.write_png(png_path)
     print(format_analysis(analysis, model.name, png_path))
+    return 0
+
+
+def _run_play(args: argparse.Namespace) -> int:
+    from catan_coach.engine.web import run_local_server
+
+    try:
+        run_local_server(
+            host=args.host,
+            port=args.port,
+            open_browser=not args.no_browser,
+        )
+    except RuntimeError as error:
+        print(error, file=sys.stderr)
+        return 1
     return 0
 
 

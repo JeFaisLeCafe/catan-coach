@@ -17,6 +17,17 @@ uv run pytest
 
 The first sync builds catanatron from a pinned git commit and takes a couple of minutes.
 
+## Play locally
+
+Requires Node.js 24 and npm 11 in addition to the Python setup.
+
+```bash
+uv run catan-coach play
+```
+
+This builds the browser app, starts the local server, and opens Catan Coach. Games are
+saved in `~/.catan-coach/games.sqlite` and can be resumed from the home page.
+
 ## Layout
 
 ```
