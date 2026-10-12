@@ -44,7 +44,10 @@ test("translates browser setup options for game creation", async () => {
 
   await expect(
     createGame({
-      players: ["HUMAN", "CATANATRON"],
+      players: [
+        { key: "HUMAN", params: {} },
+        { key: "CATANATRON", params: { depth: 3 } },
+      ],
       mapTemplate: "BASE",
       vpsToWin: 10,
       discardLimit: 7,
@@ -53,7 +56,10 @@ test("translates browser setup options for game creation", async () => {
   ).resolves.toBe("new-game");
 
   expect(http.post).toHaveBeenCalledWith("/api/games", {
-    players: ["HUMAN", "CATANATRON"],
+    players: [
+      { key: "HUMAN", params: {} },
+      { key: "CATANATRON", params: { depth: 3 } },
+    ],
     map_template: "BASE",
     vps_to_win: 10,
     discard_limit: 7,

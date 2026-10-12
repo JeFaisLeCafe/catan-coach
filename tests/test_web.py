@@ -16,7 +16,11 @@ def test_local_app_persists_and_lists_games(tmp_path: Path) -> None:
     response = app.test_client().post(
         "/api/games",
         json={
-            "players": ["HUMAN", "W"],
+            "players": [
+                {"key": "HUMAN", "params": {}},
+                {"key": "W", "params": {}},
+                {"key": "R", "params": {}},
+            ],
             "map_template": "BASE",
         },
     )
@@ -29,7 +33,7 @@ def test_local_app_persists_and_lists_games(tmp_path: Path) -> None:
 
     state = app.test_client().get(f"/api/games/{game_id}/states/latest").get_json()
     human_index = state["colors"].index(human_color)
-    opponent_index = 1 - human_index
+    opponent_index = next(index for index in range(len(state["colors"])) if index != human_index)
     assert f"P{human_index}_WOOD_IN_HAND" in state["player_state"]
     assert f"P{opponent_index}_WOOD_IN_HAND" not in state["player_state"]
     assert f"P{opponent_index}_NUM_RESOURCES_IN_HAND" in state["player_state"]
@@ -55,7 +59,7 @@ def test_local_app_persists_and_lists_games(tmp_path: Path) -> None:
         "status": "in_progress",
         "winning_color": None,
     }
-    assert set(saved_game["players"]) == {"HUMAN", "W"}
+    assert set(saved_game["players"]) == {"HUMAN", "W", "R"}
 
 
 @pytest.mark.engine
@@ -74,3 +78,80 @@ def test_local_app_serves_browser_routes(tmp_path: Path) -> None:
     assert client.get("/").text == "<main>Catan Coach</main>"
     assert client.get("/games/saved-game").text == "<main>Catan Coach</main>"
     assert client.get("/asset.txt").text == "asset"
+
+
+@pytest.mark.engine
+@pytest.mark.parametrize(
+    "players",
+    [
+        ["HUMAN", "R"],
+        ["HUMAN", "HUMAN", "R"],
+        ["R", "R", "R"],
+    ],
+)
+def test_local_game_rejects_nonstandard_seating(
+    tmp_path: Path,
+    players: list[str],
+) -> None:
+    app = create_local_app(
+        database_path=tmp_path / "games.sqlite",
+        web_root=tmp_path,
+        testing=True,
+    )
+
+    response = app.test_client().post("/api/games", json={"players": players})
+
+    assert response.status_code == 400
+
+
+@pytest.mark.engine
+def test_local_game_rejects_an_unsupported_mode(tmp_path: Path) -> None:
+    app = create_local_app(
+        database_path=tmp_path / "games.sqlite",
+        web_root=tmp_path,
+        testing=True,
+    )
+
+    response = app.test_client().post(
+        "/api/games",
+        json={"mode": "other", "players": ["HUMAN", "R", "R"]},
+    )
+
+    assert response.status_code == 400
+
+
+@pytest.mark.engine
+def test_reduced_target_human_vs_bots_game_completes_and_is_durable(
+    tmp_path: Path,
+) -> None:
+    app = create_local_app(
+        database_path=tmp_path / "games.sqlite",
+        web_root=tmp_path,
+        testing=True,
+    )
+    client = app.test_client()
+    game_id = client.post(
+        "/api/games",
+        json={"players": ["HUMAN", "R", "R"], "vps_to_win": 3},
+    ).get_json()["game_id"]
+
+    for _ in range(1_000):
+        state = client.get(f"/api/games/{game_id}/states/latest").get_json()
+        if state["winning_color"] is not None:
+            break
+        action = None
+        if state["current_color"] not in state["bot_colors"]:
+            action = state["current_playable_actions"][0]
+        advanced = client.post(
+            f"/api/games/{game_id}/actions",
+            json=action,
+        ).get_json()
+        persisted = client.get(f"/api/games/{game_id}/states/latest").get_json()
+        assert persisted["state_index"] == advanced["state_index"]
+    else:
+        pytest.fail("Reduced-target game did not finish")
+
+    assert state["winning_color"] in state["colors"]
+    [saved_game] = client.get("/api/games").get_json()
+    assert saved_game["status"] == "finished"
+    assert saved_game["winning_color"] == state["winning_color"]

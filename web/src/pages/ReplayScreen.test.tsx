@@ -23,10 +23,6 @@ vi.mock("../components/RightDrawer", () => ({
     <aside>{children}</aside>
   ),
 }));
-vi.mock("../components/AnalysisBox", () => ({
-  default: () => <div>Analysis</div>,
-}));
-
 function StateIndexProbe() {
   const { state } = useContext(store);
   return (
@@ -78,4 +74,17 @@ test("loads the latest replay boundary and navigates persisted states", async ()
     expect(screen.getByTestId("state-index")).toHaveTextContent("1");
     expect(screen.getByText("Move: 1 / 12")).toBeInTheDocument();
   });
+});
+
+test("names the winner from the finished Position", async () => {
+  vi.mocked(getState).mockImplementation(async (_gameId, stateIndex) =>
+    makeGameState({
+      state_index: stateIndex === "latest" ? 12 : Number(stateIndex),
+      winning_color: stateIndex === "latest" ? "ORANGE" : null,
+    }),
+  );
+
+  renderReplayScreen();
+
+  expect(await screen.findByText("ORANGE")).toBeInTheDocument();
 });

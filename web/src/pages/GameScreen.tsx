@@ -1,6 +1,5 @@
-import { useEffect, useState, useContext } from "react";
-import { useParams } from "react-router-dom";
-import PropTypes from "prop-types";
+import { useContext, useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { GridLoader } from "react-spinners";
 import { useSnackbar } from "notistack";
 
@@ -15,49 +14,112 @@ import { type StateIndex, getState, postAction } from "../utils/apiClient";
 import { dispatchSnackbar } from "../components/Snackbar";
 import { getHumanColor } from "../utils/stateUtils";
 
-const ROBOT_THINKING_TIME = 300;
+// Visual pacing only; postAction already waits for the bot's real computation.
+const BOT_PRESENTATION_DELAY_MS = 300;
 
 function GameScreen({ replayMode }: { replayMode: boolean }) {
   const { gameId, stateIndex } = useParams();
+  const navigate = useNavigate();
   const { state, dispatch } = useContext(store);
   const { enqueueSnackbar, closeSnackbar } = useSnackbar();
   const [isBotThinking, setIsBotThinking] = useState(false);
+  const botRequest = useRef<{ gameId: string } | null>(null);
+  const activeGameId = useRef(gameId);
 
-  // Load game state
+  useEffect(() => {
+    activeGameId.current = gameId;
+    return () => {
+      if (activeGameId.current === gameId) {
+        activeGameId.current = undefined;
+      }
+      if (botRequest.current?.gameId === gameId) {
+        botRequest.current = null;
+      }
+    };
+  }, [gameId]);
+
   useEffect(() => {
     if (!gameId) {
       return;
     }
 
+    let cancelled = false;
     (async () => {
       const gameState = await getState(gameId, stateIndex as StateIndex);
-      dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
+      if (!cancelled) {
+        dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
+      }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [gameId, stateIndex, dispatch]);
 
-  // Maybe kick off next query?
   useEffect(() => {
-    if (!state.gameState || replayMode || !gameId) {
+    if (
+      gameId &&
+      !replayMode &&
+      state.gameState?.game.id === gameId &&
+      state.gameState?.winning_color !== null &&
+      state.gameState?.winning_color !== undefined
+    ) {
+      navigate(`/replays/${gameId}`, { replace: true });
+    }
+  }, [
+    gameId,
+    navigate,
+    replayMode,
+    state.gameState?.game.id,
+    state.gameState?.winning_color,
+  ]);
+
+  useEffect(() => {
+    if (
+      !state.gameState ||
+      state.gameState.game.id !== gameId ||
+      replayMode ||
+      !gameId ||
+      botRequest.current?.gameId === gameId
+    ) {
       return;
     }
     if (
       state.gameState.bot_colors.includes(state.gameState.current_color) &&
       !state.gameState.winning_color
     ) {
-      // Make bot click next action.
+      const request = { gameId };
+      botRequest.current = request;
+      const finishRequest = () => {
+        if (botRequest.current === request) {
+          botRequest.current = null;
+          setIsBotThinking(false);
+        }
+      };
       (async () => {
         setIsBotThinking(true);
-        const start = new Date();
-        const gameState = await postAction(gameId);
-        const requestTime = new Date().valueOf() - start.valueOf();
-        setTimeout(() => {
-          // simulate thinking
-          setIsBotThinking(false);
-          dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
-          if (getHumanColor(gameState)) {
-            dispatchSnackbar(enqueueSnackbar, closeSnackbar, gameState);
+        try {
+          const gameState = await postAction(gameId);
+          if (activeGameId.current !== gameId) {
+            finishRequest();
+            return;
           }
-        }, ROBOT_THINKING_TIME - requestTime);
+          setTimeout(() => {
+            if (
+              activeGameId.current !== gameId ||
+              botRequest.current !== request
+            ) {
+              finishRequest();
+              return;
+            }
+            finishRequest();
+            dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
+            if (getHumanColor(gameState)) {
+              dispatchSnackbar(enqueueSnackbar, closeSnackbar, gameState);
+            }
+          }, BOT_PRESENTATION_DELAY_MS);
+        } catch {
+          finishRequest();
+        }
       })();
     }
   }, [
@@ -86,13 +148,5 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
     </main>
   );
 }
-
-GameScreen.propTypes = {
-  /**
-   * Injected by the documentation to work in an iframe.
-   * You won't need it on your project.
-   */
-  window: PropTypes.func,
-};
 
 export default GameScreen;

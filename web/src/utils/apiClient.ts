@@ -25,6 +25,11 @@ export type PlayerEntry = {
   params: PlayerParam[];
 };
 
+export interface PlayerSpec {
+  key: PlayerKey;
+  params: Record<string, number | string | boolean | null>;
+}
+
 export type MapTemplate = "BASE" | "MINI" | "TOURNAMENT";
 export type StateIndex = number | `${number}` | "latest";
 
@@ -37,7 +42,7 @@ export interface SavedGame {
 }
 
 type CreateGameOptions = {
-  players: PlayerKey[];
+  players: PlayerSpec[];
   mapTemplate: MapTemplate;
   vpsToWin: number;
   discardLimit: number;

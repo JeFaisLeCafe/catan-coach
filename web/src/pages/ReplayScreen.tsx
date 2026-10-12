@@ -11,12 +11,14 @@ import { store } from "../store";
 import ACTIONS from "../actions";
 import { getState } from "../utils/apiClient";
 import ReplayBox from "../components/ReplayBox";
+import type { Color } from "../utils/api.types";
 
 function ReplayScreen() {
   const { gameId } = useParams();
   const { state, dispatch } = useContext(store);
   const [latestStateIndex, setLatestStateIndex] = useState<number>(0);
   const [stateIndex, setStateIndex] = useState<number>(0);
+  const [winner, setWinner] = useState<Color | null>(null);
 
   const handlePrevState = () => setStateIndex((prev) => Math.max(prev - 1, 0));
   const handleNextState = () =>
@@ -29,6 +31,7 @@ function ReplayScreen() {
       const latestState = await getState(gameId, "latest");
       dispatch({ type: ACTIONS.SET_GAME_STATE, data: latestState });
       setLatestStateIndex(latestState.state_index);
+      setWinner(latestState.winning_color);
     })();
   }, [gameId, dispatch]);
 
@@ -54,6 +57,11 @@ function ReplayScreen() {
   return (
     <main>
       <h1 className="logo">Catan Coach</h1>
+      {winner && (
+        <p className="winner">
+          Winner: <strong>{winner}</strong>
+        </p>
+      )}
       <ZoomableBoard replayMode={true} />
       <LeftDrawer />
       <RightDrawer>

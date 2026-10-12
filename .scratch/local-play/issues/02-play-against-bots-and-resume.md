@@ -5,7 +5,7 @@ autosaved after every Ply.
 
 **Blocked by:** 01 (Open a local game in the browser)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] A standard game seats three or four players with exactly one human
 - [ ] Bot type and strength are selectable from the server's registered players

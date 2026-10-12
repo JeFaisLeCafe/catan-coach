@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import cast
 
 from catanatron.game import Game
+from catanatron.registry import REGISTRY, SpecError, parse_spec
 from catanatron.web import api as catanatron_api
 from catanatron.web import create_app as create_catanatron_app
 from catanatron.web.models import StoredGame, db, get_game_state
@@ -39,6 +40,7 @@ def create_local_app(
             }
         ),
     )
+    app.before_request(_validate_local_game_setup)
 
     @app.get("/api/games")
     def list_games() -> ResponseReturnValue:
@@ -89,6 +91,26 @@ def _local_perspective(game: Game) -> str | None:
         return human_colors[0]
     if request.args.get("as") is not None:
         return cast(str | None, _UPSTREAM_PERSPECTIVE(game))
+    return None
+
+
+def _validate_local_game_setup() -> ResponseReturnValue | None:
+    if request.endpoint != "api.post_game_endpoint" or request.method != "POST":
+        return None
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return None
+    if body.get("mode", "play") != "play":
+        abort(400, description="Unsupported game mode")
+    players = body.get("players")
+    if not isinstance(players, list) or len(players) not in (3, 4):
+        abort(400, description="A local game needs 3 or 4 players")
+    try:
+        player_classes = [REGISTRY.lookup(parse_spec(spec)[0]) for spec in players]
+    except SpecError:
+        return None
+    if sum(not player_class.IS_BOT for player_class in player_classes) != 1:
+        abort(400, description="A local game needs exactly one human")
     return None
 
 

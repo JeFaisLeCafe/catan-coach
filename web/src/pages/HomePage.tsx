@@ -5,13 +5,12 @@ import {
   Button,
   Checkbox,
   IconButton,
-  MenuItem,
-  Select,
   Slider,
   Tooltip,
 } from "@mui/material";
 import HelpOutlineRoundedIcon from "@mui/icons-material/HelpOutlineRounded";
 import { GridLoader } from "react-spinners";
+import PlayerSetup from "../components/PlayerSetup";
 import {
   createGame,
   getGames,
@@ -19,6 +18,7 @@ import {
   type MapTemplate,
   type PlayerEntry,
   type PlayerKey,
+  type PlayerSpec,
   type SavedGame,
 } from "../utils/apiClient";
 
@@ -33,15 +33,22 @@ export default function HomePage() {
   const [vpsToWin, setVpsToWin] = useState(10);
   const [discardLimit, setDiscardLimit] = useState(7);
   const [friendlyRobber, setFriendlyRobber] = useState(false);
-  const [players, setPlayers] = useState<PlayerKey[]>(["HUMAN", "CATANATRON"]);
+  const [players, setPlayers] = useState<PlayerSpec[]>([
+    { key: "HUMAN", params: {} },
+    { key: "CATANATRON", params: {} },
+    { key: "CATANATRON", params: {} },
+  ]);
   const [available, setAvailable] = useState<PlayerEntry[]>([]);
   const [savedGames, setSavedGames] = useState<SavedGame[]>([]);
+  const [startError, setStartError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   // The server decides which players exist; the UI no longer hardcodes them.
   useEffect(() => {
     getPlayers()
-      .then(setAvailable)
+      .then((entries) =>
+        setAvailable(entries.filter((entry) => entry.key !== "H")),
+      )
       .catch(() => setAvailable([]));
     getGames()
       .then(setSavedGames)
@@ -53,50 +60,98 @@ export default function HomePage() {
     [available],
   );
   const isHuman = (key: PlayerKey) => humanKeys.has(key);
-  const humanCount = players.filter(isHuman).length;
-  const hasTooManyHumans = humanCount > 1;
+  const humanCount = players.filter((player) => isHuman(player.key)).length;
+  const hasInvalidHumanCount = humanCount !== 1;
+  const hasInvalidBotParams = players.some((player) => {
+    const entry = available.find((option) => option.key === player.key);
+    return entry?.params.some((param) => {
+      const value = Object.prototype.hasOwnProperty.call(
+        player.params,
+        param.name,
+      )
+        ? player.params[param.name]
+        : param.default;
+      if (value === null) {
+        return param.default !== null;
+      }
+      return (
+        (param.type === "int" || param.type === "float") &&
+        (typeof value !== "number" || !Number.isFinite(value))
+      );
+    });
+  });
+
+  const playerSpec = (key: PlayerKey): PlayerSpec => {
+    const entry = available.find((option) => option.key === key);
+    return {
+      key,
+      params: Object.fromEntries(
+        (entry?.params ?? []).map((param) => [param.name, param.default]),
+      ),
+    };
+  };
 
   const handlePlayerChange = (index: number, value: PlayerKey) => {
-    if (isHuman(value) && !isHuman(players[index]) && humanCount >= 1) {
+    if (isHuman(value) && !isHuman(players[index].key) && humanCount >= 1) {
       return;
     }
 
     setPlayers((current) =>
       current.map((player, playerIndex) =>
-        playerIndex === index ? value : player,
+        playerIndex === index ? playerSpec(value) : player,
+      ),
+    );
+  };
+
+  const handlePlayerParamChange = (
+    index: number,
+    name: string,
+    value: number | string | boolean | null,
+  ) => {
+    setPlayers((current) =>
+      current.map((player, playerIndex) =>
+        playerIndex === index
+          ? { ...player, params: { ...player.params, [name]: value } }
+          : player,
       ),
     );
   };
 
   const handleAddPlayer = () => {
     setPlayers((current) =>
-      current.length >= 4 ? current : [...current, "W"],
+      current.length >= 4 ? current : [...current, playerSpec("CATANATRON")],
     );
   };
 
   const handleRemovePlayer = (index: number) => {
     setPlayers((current) =>
-      current.length <= 2
+      current.length <= 3
         ? current
         : current.filter((_, playerIndex) => playerIndex !== index),
     );
   };
 
   const handleCreateGame = async () => {
-    if (hasTooManyHumans) {
+    if (hasInvalidHumanCount || hasInvalidBotParams || players.length < 3) {
       return;
     }
 
     setLoading(true);
-    const gameId = await createGame({
-      players,
-      mapTemplate,
-      vpsToWin,
-      discardLimit,
-      friendlyRobber,
-    });
-    setLoading(false);
-    navigate("/games/" + gameId);
+    setStartError(null);
+    try {
+      const gameId = await createGame({
+        players,
+        mapTemplate,
+        vpsToWin,
+        discardLimit,
+        friendlyRobber,
+      });
+      navigate("/games/" + gameId);
+    } catch {
+      setStartError("Could not start the game. Check the player settings.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -228,56 +283,38 @@ export default function HomePage() {
                   <span>Players</span>
                   <strong>{players.length}/4</strong>
                 </div>
-                {hasTooManyHumans && (
+                {hasInvalidHumanCount && (
                   <Alert severity="error" className="players-alert">
-                    Only one Human player is allowed.
+                    Exactly one Human player is required.
+                  </Alert>
+                )}
+                {hasInvalidBotParams && (
+                  <Alert severity="error" className="players-alert">
+                    Bot parameters must be valid numbers.
+                  </Alert>
+                )}
+                {startError && (
+                  <Alert severity="error" className="players-alert">
+                    {startError}
                   </Alert>
                 )}
                 <div className="players-list">
                   {players.map((player, index) => (
-                    <div className="player-row" key={`${player}-${index}`}>
-                      <div className="player-meta">
-                        <span className="player-label">Player {index + 1}</span>
-                        <span
-                          className={`player-color-chip ${PLAYER_COLORS[index].toLowerCase()}`}
-                        >
-                          {PLAYER_COLORS[index]}
-                        </span>
-                      </div>
-                      <Select
-                        size="small"
-                        fullWidth
-                        value={player}
-                        onChange={(event) =>
-                          handlePlayerChange(
-                            index,
-                            event.target.value as PlayerKey,
-                          )
-                        }
-                      >
-                        {available.map((option) => (
-                          <MenuItem
-                            key={option.key}
-                            value={option.key}
-                            disabled={
-                              isHuman(option.key) &&
-                              humanCount >= 1 &&
-                              !isHuman(player)
-                            }
-                          >
-                            {option.name}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                      <Button
-                        variant="text"
-                        className="remove-player-btn"
-                        disabled={players.length <= 2}
-                        onClick={() => handleRemovePlayer(index)}
-                      >
-                        Remove
-                      </Button>
-                    </div>
+                    <PlayerSetup
+                      key={`${player.key}-${index}`}
+                      color={PLAYER_COLORS[index]}
+                      index={index}
+                      player={player}
+                      available={available}
+                      humanKeys={humanKeys}
+                      humanCount={humanCount}
+                      canRemove={players.length > 3}
+                      onPlayerChange={(key) => handlePlayerChange(index, key)}
+                      onParamChange={(name, value) =>
+                        handlePlayerParamChange(index, name, value)
+                      }
+                      onRemove={() => handleRemovePlayer(index)}
+                    />
                   ))}
                 </div>
 
@@ -295,7 +332,11 @@ export default function HomePage() {
                 variant="contained"
                 color="primary"
                 className="start-btn"
-                disabled={hasTooManyHumans}
+                disabled={
+                  hasInvalidHumanCount ||
+                  hasInvalidBotParams ||
+                  players.length < 3
+                }
                 onClick={handleCreateGame}
               >
                 Start
