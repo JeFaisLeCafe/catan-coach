@@ -9,10 +9,15 @@ import LeftDrawer from "../components/LeftDrawer";
 import RightDrawer from "../components/RightDrawer";
 import { store } from "../store";
 import ACTIONS from "../actions";
-import { getReview, getState } from "../utils/apiClient";
+import { getPositionLines, getReview, getState } from "../utils/apiClient";
 import ReplayBox from "../components/ReplayBox";
+import PositionLines from "../components/PositionLines";
 import ReviewPanel from "../components/ReviewPanel";
-import type { BlunderReport, Color } from "../utils/api.types";
+import type {
+  BlunderReport,
+  Color,
+  PositionLines as PositionLinesReport,
+} from "../utils/api.types";
 
 function ReplayScreen() {
   const { gameId } = useParams();
@@ -22,6 +27,8 @@ function ReplayScreen() {
   const [winner, setWinner] = useState<Color | null>(null);
   const [report, setReport] = useState<BlunderReport | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [lines, setLines] = useState<PositionLinesReport | null>(null);
+  const [linesError, setLinesError] = useState<string | null>(null);
 
   const handlePrevState = () => setStateIndex((prev) => Math.max(prev - 1, 0));
   const handleNextState = () =>
@@ -56,6 +63,30 @@ function ReplayScreen() {
       cancelled = true;
     };
   }, [gameId]);
+
+  useEffect(() => {
+    if (!gameId) {
+      return;
+    }
+    let cancelled = false;
+    setLines(null);
+    setLinesError(null);
+    (async () => {
+      try {
+        const next = await getPositionLines(gameId, stateIndex);
+        if (!cancelled) {
+          setLines(next);
+        }
+      } catch {
+        if (!cancelled) {
+          setLinesError("This position could not be read.");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [gameId, stateIndex]);
 
   useEffect(() => {
     if (!gameId) return;
@@ -98,6 +129,7 @@ function ReplayScreen() {
       <ZoomableBoard replayMode={true} />
       <LeftDrawer />
       <RightDrawer>
+        <PositionLines lines={lines} error={linesError} />
         <ReviewPanel
           report={report}
           error={reviewError}

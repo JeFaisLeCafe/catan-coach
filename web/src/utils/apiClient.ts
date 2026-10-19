@@ -7,6 +7,7 @@ import type {
   GameAction,
   GameState,
   LiveAnalysis,
+  PositionLines,
 } from "./api.types";
 
 /** A registry key, e.g. "CATANATRON" or "AB". The server decides what exists. */
@@ -96,6 +97,16 @@ export async function getState(
 export async function getReview(gameId: string): Promise<BlunderReport> {
   const response = await axios.get<BlunderReport>(
     `${API_URL}/api/games/${gameId}/review`,
+  );
+  return response.data;
+}
+
+export async function getPositionLines(
+  gameId: string,
+  stateIndex: number,
+): Promise<PositionLines> {
+  const response = await axios.get<PositionLines>(
+    `${API_URL}/api/games/${gameId}/states/${stateIndex}/analysis`,
   );
   return response.data;
 }

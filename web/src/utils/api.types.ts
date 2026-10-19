@@ -195,6 +195,26 @@ export type LiveAnalysis = {
   actions: RankedAnalysisAction[];
 };
 
+export type PositionLine = {
+  action: string;
+  summary: string;
+  win_probability: number;
+  loss: number;
+  reasons: AnalysisReason[];
+};
+
+export type PositionLines = {
+  seat: Color;
+  model: string;
+  fallback: boolean;
+  notice: string | null;
+  forced: boolean;
+  ordering: "tiles" | "win_probability";
+  win_probability: number | null;
+  played: string | null;
+  lines: PositionLine[];
+};
+
 export type DecisionGrade = "best" | "near-tie" | "mistake" | "blunder";
 
 export type ReviewedDecision = {

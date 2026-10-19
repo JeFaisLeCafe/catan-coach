@@ -222,6 +222,41 @@ def test_live_analysis_rejects_a_finished_game(tmp_path: Path) -> None:
 
 
 @pytest.mark.engine
+def test_replay_position_lists_opening_lines_and_the_played_action(tmp_path: Path) -> None:
+    app = create_local_app(
+        database_path=tmp_path / "games.sqlite",
+        web_root=tmp_path,
+        model_path=tmp_path / "missing-model.txt",
+        testing=True,
+    )
+    client = app.test_client()
+    game_id = client.post(
+        "/api/games",
+        json={"players": ["HUMAN", "R", "R"]},
+    ).get_json()["game_id"]
+    opening = client.get(f"/api/games/{game_id}/states/0").get_json()
+    played = opening["current_playable_actions"][-1]
+
+    before = client.get(f"/api/games/{game_id}/states/0/analysis")
+    assert before.status_code == 200
+    payload = before.get_json()
+    assert payload["ordering"] == "tiles"
+    assert payload["played"] is None
+    assert len(payload["lines"]) == 5
+    assert all("then road toward" in line["summary"] for line in payload["lines"])
+    assert "Listed by the hexes they touch." in payload["notice"]
+    assert client.get(f"/api/games/{game_id}/states/99/analysis").status_code == 404
+
+    advanced = client.post(f"/api/games/{game_id}/actions", json=played).get_json()
+    record = advanced["action_records"][-1][0]
+    after = client.get(f"/api/games/{game_id}/states/0/analysis").get_json()
+    assert after["played"] == f"{record[1]} {record[2]}"
+    assert any(line["action"] == after["played"] for line in after["lines"])
+    latest = client.get(f"/api/games/{game_id}/states/latest").get_json()
+    assert latest["state_index"] == 1
+
+
+@pytest.mark.engine
 def test_recorded_random_results_match_the_legal_choice() -> None:
     from catan_coach.engine.review import match_played_label
 

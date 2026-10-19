@@ -4,6 +4,7 @@ import {
   createGame,
   getAnalysis,
   getGames,
+  getPositionLines,
   getReview,
   getState,
   postAction,
@@ -66,6 +67,27 @@ test("loads live Analysis without posting an Action", async () => {
 
   await expect(getAnalysis("game-123")).resolves.toEqual(analysis);
   expect(http.get).toHaveBeenCalledWith("/api/games/game-123/analysis");
+  expect(http.post).not.toHaveBeenCalled();
+});
+
+test("loads the lines for one replay Position", async () => {
+  const lines = {
+    seat: "RED",
+    model: "vp-share(T=2.0)",
+    fallback: true,
+    notice: null,
+    forced: false,
+    ordering: "tiles",
+    win_probability: 0.33,
+    played: null,
+    lines: [],
+  };
+  http.get.mockResolvedValueOnce({ data: lines });
+
+  await expect(getPositionLines("game-123", 0)).resolves.toEqual(lines);
+  expect(http.get).toHaveBeenCalledWith(
+    "/api/games/game-123/states/0/analysis",
+  );
   expect(http.post).not.toHaveBeenCalled();
 });
 

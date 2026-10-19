@@ -6,13 +6,15 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import { StateProvider, store } from "../store";
 import { makeGameState } from "../test/fixtures";
-import { getReview, getState } from "../utils/apiClient";
+import { getPositionLines, getReview, getState } from "../utils/apiClient";
+import type { PositionLines as PositionLinesReport } from "../utils/api.types";
 import type { BlunderReport } from "../utils/api.types";
 import ReplayScreen from "./ReplayScreen";
 
 vi.mock("../utils/apiClient", () => ({
   getState: vi.fn(),
   getReview: vi.fn(),
+  getPositionLines: vi.fn(),
 }));
 vi.mock("./ZoomableBoard", () => ({
   default: () => <div data-testid="board">Board</div>,
@@ -45,6 +47,34 @@ function renderReplayScreen() {
   );
 }
 
+const openingLines: PositionLinesReport = {
+  seat: "RED",
+  model: "vp-share(T=2.0)",
+  fallback: true,
+  notice:
+    "These Actions tie on Win Probability. Listed by the hexes they touch.",
+  forced: false,
+  ordering: "tiles",
+  win_probability: 0.333,
+  played: "BUILD_SETTLEMENT 3",
+  lines: [
+    {
+      action: "BUILD_SETTLEMENT 12",
+      summary: "6 wheat · 9 wood · 5 ore, then road toward 8 brick",
+      win_probability: 0.333,
+      loss: 0,
+      reasons: [],
+    },
+    {
+      action: "BUILD_SETTLEMENT 3",
+      summary: "2 wood · 11 brick, then road toward 4 sheep",
+      win_probability: 0.333,
+      loss: 0,
+      reasons: [],
+    },
+  ],
+};
+
 const emptyReport: BlunderReport = {
   seat: "BLUE",
   model: "vp-share(T=2.0)",
@@ -60,6 +90,7 @@ const emptyReport: BlunderReport = {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getReview).mockResolvedValue(emptyReport);
+  vi.mocked(getPositionLines).mockResolvedValue(openingLines);
   vi.mocked(getState).mockImplementation(async (_gameId, stateIndex) => {
     const index = stateIndex === "latest" ? 12 : Number(stateIndex);
     return makeGameState({ state_index: index });
@@ -102,6 +133,27 @@ test("names the winner from the finished Position", async () => {
   renderReplayScreen();
 
   expect(await screen.findByText("ORANGE")).toBeInTheDocument();
+});
+
+test("shows the lines for the position on the board", async () => {
+  const user = userEvent.setup();
+  renderReplayScreen();
+
+  expect(
+    await screen.findByText(/6 wheat · 9 wood · 5 ore/),
+  ).toBeInTheDocument();
+  expect(screen.getByText(/RED to move · best 33.3%/)).toBeInTheDocument();
+  expect(
+    screen.getByText(/Listed by the hexes they touch/),
+  ).toBeInTheDocument();
+  expect(screen.getByText("2 · played")).toBeInTheDocument();
+  expect(getPositionLines).toHaveBeenCalledWith("game-123", 0);
+
+  await user.click(screen.getByRole("button", { name: "Next Move" }));
+
+  await waitFor(() => {
+    expect(getPositionLines).toHaveBeenCalledWith("game-123", 1);
+  });
 });
 
 test("opens a reviewed ply and sorts decisions by loss", async () => {

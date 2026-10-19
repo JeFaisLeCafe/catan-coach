@@ -9,9 +9,10 @@ from typing import cast
 
 from catanatron.game import Game
 from catanatron.registry import REGISTRY, SpecError, parse_spec
+from catanatron.serialization import action_record_from_json
 from catanatron.web import api as catanatron_api
 from catanatron.web import create_app as create_catanatron_app
-from catanatron.web.models import StoredGame, db, get_game_state
+from catanatron.web.models import StoredAction, StoredGame, db, get_game_state
 from flask import Flask, abort, jsonify, request, send_from_directory
 from flask.typing import ResponseReturnValue
 from sqlalchemy import select
@@ -19,7 +20,8 @@ from sqlalchemy import select
 from catan_coach.domain.analysis import analyze
 from catan_coach.domain.prediction import WinProbabilityModel
 from catan_coach.engine.features import feature_names, public_vp_indices
-from catan_coach.engine.position import EnginePosition
+from catan_coach.engine.lines import position_lines
+from catan_coach.engine.position import EnginePosition, action_label
 from catan_coach.engine.review import advance_blunder_report
 from catan_coach.models.baselines import VictoryPointShareModel
 
@@ -117,6 +119,29 @@ def create_local_app(
             }
         )
 
+    @app.get("/api/games/<string:game_id>/states/<int:state_index>/analysis")
+    def position_analysis(game_id: str, state_index: int) -> ResponseReturnValue:
+        game = get_game_state(game_id, state_index)
+        if game is None:
+            abort(404, description="Resource not found")
+        model, fallback = _load_analysis_model(len(game.state.colors), model_path)
+        lines = position_lines(
+            game,
+            model,
+            played=_recorded_action_label(game_id, state_index),
+        )
+        return jsonify(
+            {
+                **lines,
+                "model": model.name,
+                "fallback": fallback,
+                "notice": _position_notice(
+                    fallback=fallback,
+                    ordering=str(lines["ordering"]),
+                ),
+            }
+        )
+
     @app.get("/api/games/<string:game_id>/review")
     def game_review(game_id: str) -> ResponseReturnValue:
         game = get_game_state(game_id)
@@ -148,6 +173,30 @@ def create_local_app(
         abort(503, description="Browser assets are not built")
 
     return app
+
+
+def _recorded_action_label(game_id: str, state_index: int) -> str | None:
+    entry = db.session.scalar(
+        select(StoredAction).where(
+            StoredAction.uuid == game_id,
+            StoredAction.index == state_index,
+        )
+    )
+    if entry is None:
+        return None
+    record = action_record_from_json(json.loads(entry.payload))
+    return action_label(record.action)
+
+
+def _position_notice(*, fallback: bool, ordering: str) -> str | None:
+    parts: list[str] = []
+    if fallback:
+        parts.append("No trained model is available; using the vp-share Baseline.")
+    if ordering == "tiles":
+        parts.append("These Actions tie on Win Probability. Listed by the hexes they touch.")
+    if not parts:
+        return None
+    return " ".join(parts)
 
 
 def _load_analysis_model(
