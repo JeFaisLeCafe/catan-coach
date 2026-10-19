@@ -219,3 +219,82 @@ def test_live_analysis_rejects_a_finished_game(tmp_path: Path) -> None:
     response = client.get(f"/api/games/{game_id}/analysis")
 
     assert response.status_code == 409
+
+
+@pytest.mark.engine
+def test_recorded_random_results_match_the_legal_choice() -> None:
+    from catan_coach.engine.review import match_played_label
+
+    assert (
+        match_played_label(
+            "BUY_DEVELOPMENT_CARD VICTORY_POINT",
+            ["END_TURN", "BUY_DEVELOPMENT_CARD"],
+        )
+        == "BUY_DEVELOPMENT_CARD"
+    )
+    assert match_played_label("ROLL (4, 2)", ["ROLL"]) == "ROLL"
+    assert (
+        match_played_label(
+            "BUILD_SETTLEMENT 3",
+            ["BUILD_SETTLEMENT 3", "BUILD_SETTLEMENT 8"],
+        )
+        == "BUILD_SETTLEMENT 3"
+    )
+
+
+@pytest.mark.engine
+def test_blunder_report_resumes_across_batches_without_changing_the_game(
+    tmp_path: Path,
+) -> None:
+    app = create_local_app(
+        database_path=tmp_path / "games.sqlite",
+        web_root=tmp_path,
+        model_path=tmp_path / "missing-model.txt",
+        testing=True,
+    )
+    client = app.test_client()
+    game_id = client.post(
+        "/api/games",
+        json={"players": ["HUMAN", "R", "R"]},
+    ).get_json()["game_id"]
+
+    human_plies: list[int] = []
+    for _ in range(40):
+        if len(human_plies) == 2:
+            break
+        state = client.get(f"/api/games/{game_id}/states/latest").get_json()
+        if state["current_color"] not in state["bot_colors"]:
+            if len(state["current_playable_actions"]) > 1:
+                human_plies.append(state["state_index"])
+            client.post(
+                f"/api/games/{game_id}/actions",
+                json=state["current_playable_actions"][0],
+            )
+        else:
+            client.post(f"/api/games/{game_id}/actions")
+    else:
+        pytest.fail("Game did not reach two human choices")
+
+    before = client.get(f"/api/games/{game_id}/states/latest").get_json()
+    first = client.get(f"/api/games/{game_id}/review?batch=1")
+    assert first.status_code == 200
+    first_payload = first.get_json()
+    assert first_payload["complete"] is False
+    assert first_payload["search_budget"] == "immediate"
+    assert first_payload["model"] == "vp-share(T=2.0)"
+    assert first_payload["fallback"] is True
+    assert "No trained model" in first_payload["notice"]
+    assert [row["ply"] for row in first_payload["decisions"]] == [human_plies[0]]
+    assert first_payload["decisions"][0]["grade"] in {"best", "near-tie", "mistake", "blunder"}
+    assert {"played", "best", "win_probability", "loss", "reasons", "seat"} <= first_payload[
+        "decisions"
+    ][0].keys()
+
+    second = client.get(f"/api/games/{game_id}/review?batch=1").get_json()
+    assert [row["ply"] for row in second["decisions"]] == human_plies
+    assert second["complete"] is True
+    assert second["decisions"][0] == first_payload["decisions"][0]
+
+    after = client.get(f"/api/games/{game_id}/states/latest").get_json()
+    assert after["state_index"] == before["state_index"]
+    assert after["action_records"] == before["action_records"]

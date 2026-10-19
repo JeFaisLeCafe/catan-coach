@@ -4,15 +4,15 @@
 
 **Blocked by:** 02 (Play against bots and resume), 03 (Toggle Challenge and Coach Mode)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] A finished or unfinished game can open a Review page
-- [ ] The report analyzes the Position before every non-forced human Action
-- [ ] Each decision shows the played Action, best Action, Win Probability, Loss, and reasons
-- [ ] Decisions are sortable by chronology and by Loss
-- [ ] Forced Actions do not count as mistakes
-- [ ] Near-ties, mistakes, and Blunders are visually distinct
-- [ ] Selecting a row opens the board replay at that Ply
-- [ ] The report names the model and Search Budget used
-- [ ] Partial progress is saved so reviewing a long game can resume
-- [ ] Tests use a stub analyzer with hand-written Losses and one engine replay smoke test
+- [x] A finished or unfinished game can open a Review page
+- [x] The report analyzes the Position before every non-forced human Action
+- [x] Each decision shows the played Action, best Action, Win Probability, Loss, and reasons
+- [x] Decisions are sortable by chronology and by Loss
+- [x] Forced Actions do not count as mistakes
+- [x] Near-ties, mistakes, and Blunders are visually distinct
+- [x] Selecting a row opens the board replay at that Ply
+- [x] The report names the model and Search Budget used
+- [x] Partial progress is saved so reviewing a long game can resume
+- [x] Tests use a stub analyzer with hand-written Losses and one engine replay smoke test

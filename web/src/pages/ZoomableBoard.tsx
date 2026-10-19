@@ -13,7 +13,13 @@ import type { CatanState } from "../store";
 import { useParams } from "react-router-dom";
 import ACTIONS from "../actions";
 import Board from "./Board";
-import type { GameAction, TileCoordinate } from "../utils/api.types";
+import type {
+  GameAction,
+  MoveRobberAction,
+  TileCoordinate,
+} from "../utils/api.types";
+import { robberActionsForTile } from "../utils/robber";
+import RobberChoice from "../components/RobberChoice";
 
 /**
  * Returns object representing actions to be taken if click on node.
@@ -92,6 +98,9 @@ export default function ZoomableBoard({ replayMode }: ZoomableBoardProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.up("md"));
   const [show, setShow] = useState(false);
+  const [robberChoices, setRobberChoices] = useState<MoveRobberAction[] | null>(
+    null,
+  );
   const gameState = state.gameState;
   if (!gameState) throw new Error("GameState is not ready!");
   if (!gameId) throw new Error("expecting gameId in URL");
@@ -117,27 +126,31 @@ export default function ZoomableBoard({ replayMode }: ZoomableBoardProps) {
     }),
     [],
   );
+  const playRobber = useCallback(
+    (action: MoveRobberAction) => {
+      setRobberChoices(null);
+      postAction(gameId, action).then((next) => {
+        dispatch({ type: ACTIONS.SET_GAME_STATE, data: next });
+      });
+    },
+    [dispatch, gameId],
+  );
   const handleTileClick = useCallback(
-    memoize((coordinate: TileCoordinate) => {
-      console.log("Clicked Tile ", coordinate);
-      if (state.isMovingRobber) {
-        // Find the "MOVE_ROBBER" action in current_playable_actions that
-        // corresponds to the tile coordinate selected by the user
-        const matchingAction = gameState.current_playable_actions.find(
-          (action) =>
-            action[1] === "MOVE_ROBBER" &&
-            action[2][0].every(
-              (val: number, index: number) => val === coordinate[index],
-            ),
-        );
-        if (matchingAction) {
-          postAction(gameId, matchingAction).then((gameState) => {
-            dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
-          });
-        }
+    (coordinate: TileCoordinate) => {
+      if (!state.isMovingRobber) {
+        return;
       }
-    }),
-    [state.isMovingRobber],
+      const matches = robberActionsForTile(
+        gameState.current_playable_actions,
+        coordinate,
+      );
+      if (matches.length > 1) {
+        setRobberChoices(matches);
+      } else if (matches.length === 1) {
+        playRobber(matches[0]);
+      }
+    },
+    [gameState.current_playable_actions, playRobber, state.isMovingRobber],
   );
 
   const nodeActions = replayMode ? {} : buildNodeActions(state);
@@ -179,6 +192,11 @@ export default function ZoomableBoard({ replayMode }: ZoomableBoardProps) {
           />
         </TransformComponent>
       </div>
+      <RobberChoice
+        actions={robberChoices}
+        onChoose={playRobber}
+        onClose={() => setRobberChoices(null)}
+      />
     </TransformWrapper>
   );
 }

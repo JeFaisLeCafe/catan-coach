@@ -4,6 +4,7 @@ import {
   createGame,
   getAnalysis,
   getGames,
+  getReview,
   getState,
   postAction,
 } from "./apiClient";
@@ -65,6 +66,25 @@ test("loads live Analysis without posting an Action", async () => {
 
   await expect(getAnalysis("game-123")).resolves.toEqual(analysis);
   expect(http.get).toHaveBeenCalledWith("/api/games/game-123/analysis");
+  expect(http.post).not.toHaveBeenCalled();
+});
+
+test("loads a Blunder Report without posting an Action", async () => {
+  const report = {
+    seat: "BLUE",
+    model: "vp-share(T=2.0)",
+    fallback: true,
+    notice: null,
+    search_budget: "immediate",
+    complete: true,
+    through_index: 2,
+    head_index: 2,
+    decisions: [],
+  };
+  http.get.mockResolvedValueOnce({ data: report });
+
+  await expect(getReview("game-123")).resolves.toEqual(report);
+  expect(http.get).toHaveBeenCalledWith("/api/games/game-123/review");
   expect(http.post).not.toHaveBeenCalled();
 });
 

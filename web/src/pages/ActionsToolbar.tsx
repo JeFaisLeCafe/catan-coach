@@ -33,6 +33,9 @@ import { postAction } from "../utils/apiClient";
 import { humanizeTradeAction } from "../utils/promptUtils";
 import { useDiscardBatchSubmission } from "../hooks/useDiscardBatchSubmission";
 import { RESOURCE_ORDER } from "../utils/resources";
+import TradeDecision from "../components/TradeDecision";
+import TradeOfferDialog from "../components/TradeOfferDialog";
+import { emptyCounts, offerTradeAction, type ResourceCounts } from "../utils/trade";
 
 import "./ActionsToolbar.scss";
 import { useSnackbar } from "notistack";
@@ -48,6 +51,7 @@ function PlayButtons() {
   const { enqueueSnackbar, closeSnackbar } = useSnackbar();
   const [resourceSelectorOpen, setResourceSelectorOpen] = useState(false);
   const [discardPlannerOpen, setDiscardPlannerOpen] = useState(false);
+  const [offerOpen, setOfferOpen] = useState(false);
   const { isSubmitting, submitDiscardBatch } = useDiscardBatchSubmission();
 
   const carryOutAction = useCallback(
@@ -260,6 +264,19 @@ function PlayButtons() {
   const tradeActions = gameState.current_playable_actions.filter(
     (action) => action[1] === "MARITIME_TRADE",
   );
+  const hand = RESOURCE_ORDER.reduce((counts, resource) => {
+    const value = gameState.player_state[`${key}_${resource}_IN_HAND`];
+    counts[resource] = typeof value === "number" ? value : 0;
+    return counts;
+  }, emptyCounts());
+  const canOfferTrade =
+    gameState.current_prompt === "PLAY_TURN" &&
+    Boolean(gameState.player_state[`${key}_HAS_ROLLED`]) &&
+    !gameState.is_initial_build_phase &&
+    RESOURCE_ORDER.some((resource) => hand[resource] > 0);
+  const decidingTrade =
+    gameState.current_prompt === "DECIDE_TRADE" ||
+    gameState.current_prompt === "DECIDE_ACCEPTEES";
   const tradeItems = React.useMemo(() => {
     const items = tradeActions.map((action) => {
       const label = humanizeTradeAction(action);
@@ -269,9 +286,22 @@ function PlayButtons() {
         onClick: carryOutAction(action),
       };
     });
-
-    return items.sort((a, b) => a.label.localeCompare(b.label));
-  }, [tradeActions, carryOutAction]);
+    const maritime = items.sort((a, b) => a.label.localeCompare(b.label));
+    return canOfferTrade
+      ? [
+          {
+            label: "Offer a player trade",
+            disabled: false,
+            onClick: () => setOfferOpen(true),
+          },
+          ...maritime,
+        ]
+      : maritime;
+  }, [tradeActions, carryOutAction, canOfferTrade]);
+  const submitOffer = (giving: ResourceCounts, receiving: ResourceCounts) => {
+    setOfferOpen(false);
+    void carryOutAction(offerTradeAction(humanColor, giving, receiving))();
+  };
 
   const setIsMovingRobber = useCallback(() => {
     dispatch({ type: ACTIONS.SET_IS_MOVING_ROBBER });
@@ -280,6 +310,14 @@ function PlayButtons() {
   const endTurnAction = carryOutAction([humanColor, "END_TURN", null]);
   return (
     <>
+      {decidingTrade && (
+        <TradeDecision
+          gameState={gameState}
+          onAct={(action) => {
+            void carryOutAction(action)();
+          }}
+        />
+      )}
       <OptionsButton
         disabled={playableDevCardTypes.size === 0 || isPlayingDevCard}
         menuListId="use-menu-list"
@@ -297,7 +335,7 @@ function PlayButtons() {
         Buy
       </OptionsButton>
       <OptionsButton
-        disabled={tradeItems.length === 0 || isPlayingDevCard}
+        disabled={tradeItems.length === 0 || isPlayingDevCard || decidingTrade}
         menuListId="trade-menu-list"
         icon={<AccountBalanceIcon />}
         items={tradeItems}
@@ -306,7 +344,10 @@ function PlayButtons() {
       </OptionsButton>
       <Button
         disabled={
-          gameState.is_initial_build_phase || isRoadBuilding || isSubmitting
+          gameState.is_initial_build_phase ||
+          isRoadBuilding ||
+          isSubmitting ||
+          decidingTrade
         }
         variant="contained"
         color="primary"
@@ -343,6 +384,12 @@ function PlayButtons() {
         options={getValidYearOfPlentyOptions()}
         onSelect={handleResourceSelection}
         mode={isPlayingMonopoly ? "monopoly" : "yearOfPlenty"}
+      />
+      <TradeOfferDialog
+        open={offerOpen}
+        hand={hand}
+        onClose={() => setOfferOpen(false)}
+        onOffer={submitOffer}
       />
       <DiscardPlannerDialog
         open={discardPlannerOpen}

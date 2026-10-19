@@ -167,26 +167,35 @@ export default function HomePage() {
                   <strong>{savedGames.length}</strong>
                 </div>
                 {savedGames.map((game) => (
-                  <Button
-                    key={game.game_id}
-                    className="saved-game"
-                    onClick={() =>
-                      navigate(
-                        game.status === "finished"
-                          ? `/replays/${game.game_id}`
-                          : `/games/${game.game_id}`,
-                      )
-                    }
-                  >
-                    <span>
-                      {game.players.join(" vs ")} · {game.state_index} Actions
-                    </span>
-                    <strong>
-                      {game.status === "finished"
-                        ? `${game.winning_color} won`
-                        : "Continue"}
-                    </strong>
-                  </Button>
+                  <div key={game.game_id} className="saved-game-row">
+                    <Button
+                      className="saved-game"
+                      onClick={() =>
+                        navigate(
+                          game.status === "finished"
+                            ? `/replays/${game.game_id}`
+                            : `/games/${game.game_id}`,
+                        )
+                      }
+                    >
+                      <span>
+                        {game.players.join(" vs ")} · {game.state_index} Actions
+                      </span>
+                      <strong>
+                        {game.status === "finished"
+                          ? `${game.winning_color} won`
+                          : "Continue"}
+                      </strong>
+                    </Button>
+                    {game.status !== "finished" && (
+                      <Button
+                        className="saved-game"
+                        onClick={() => navigate(`/replays/${game.game_id}`)}
+                      >
+                        Review
+                      </Button>
+                    )}
+                  </div>
                 ))}
               </section>
             )}

@@ -20,6 +20,11 @@ export type GameActionRecord =
   | [PlayMonopolyAction, null]
   | [PlayYearOfPlentyAction, null]
   | [MaritimeTradeAction, null]
+  | [OfferTradeAction, null]
+  | [AcceptTradeAction, null]
+  | [RejectTradeAction, null]
+  | [ConfirmTradeAction, null]
+  | [CancelTradeAction, null]
   | [EndTurnAction, null];
 
 export type RollGameAction = [Color, "ROLL", null];
@@ -46,6 +51,11 @@ export type MaritimeTradeAction = [
   "MARITIME_TRADE",
   (ResourceCard | null)[],
 ];
+export type OfferTradeAction = [Color, "OFFER_TRADE", number[]];
+export type AcceptTradeAction = [Color, "ACCEPT_TRADE", number[]];
+export type RejectTradeAction = [Color, "REJECT_TRADE", number[]];
+export type ConfirmTradeAction = [Color, "CONFIRM_TRADE", (number | Color)[]];
+export type CancelTradeAction = [Color, "CANCEL_TRADE", null];
 export type EndTurnAction = [Color, "END_TURN", null];
 
 export type GameAction =
@@ -61,6 +71,11 @@ export type GameAction =
   | PlayYearOfPlentyAction
   | MoveRobberAction
   | MaritimeTradeAction
+  | OfferTradeAction
+  | AcceptTradeAction
+  | RejectTradeAction
+  | ConfirmTradeAction
+  | CancelTradeAction
   | EndTurnAction;
 
 export interface PlayerState {
@@ -129,6 +144,8 @@ export type GameState = {
   current_color: Color;
   winning_color: Color | null;
   current_prompt: string;
+  current_trade?: number[];
+  acceptees?: boolean[];
   player_state: PlayerState;
   action_records: GameActionRecord[];
   robber_coordinate: TileCoordinate;
@@ -176,6 +193,31 @@ export type LiveAnalysis = {
   notice: string | null;
   forced: boolean;
   actions: RankedAnalysisAction[];
+};
+
+export type DecisionGrade = "best" | "near-tie" | "mistake" | "blunder";
+
+export type ReviewedDecision = {
+  ply: number;
+  seat: Color;
+  played: string;
+  best: string;
+  win_probability: number;
+  loss: number;
+  reasons: AnalysisReason[];
+  grade: DecisionGrade;
+};
+
+export type BlunderReport = {
+  seat: Color | null;
+  model: string;
+  fallback: boolean;
+  notice: string | null;
+  search_budget: "immediate";
+  complete: boolean;
+  through_index: number;
+  head_index: number;
+  decisions: ReviewedDecision[];
 };
 const DIRECTIONS = [
   "NORTH",

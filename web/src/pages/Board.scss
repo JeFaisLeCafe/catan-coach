@@ -42,6 +42,13 @@
   position: relative;
 }
 
+.port {
+  color: #1b140c;
+  text-shadow:
+    0 0 3px #fff,
+    0 0 3px #fff;
+}
+
 @media screen and (min-width: variables.$sm-breakpoint) {
   .number-token,
   .port {

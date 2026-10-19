@@ -9,9 +9,10 @@ import LeftDrawer from "../components/LeftDrawer";
 import RightDrawer from "../components/RightDrawer";
 import { store } from "../store";
 import ACTIONS from "../actions";
-import { getState } from "../utils/apiClient";
+import { getReview, getState } from "../utils/apiClient";
 import ReplayBox from "../components/ReplayBox";
-import type { Color } from "../utils/api.types";
+import ReviewPanel from "../components/ReviewPanel";
+import type { BlunderReport, Color } from "../utils/api.types";
 
 function ReplayScreen() {
   const { gameId } = useParams();
@@ -19,10 +20,42 @@ function ReplayScreen() {
   const [latestStateIndex, setLatestStateIndex] = useState<number>(0);
   const [stateIndex, setStateIndex] = useState<number>(0);
   const [winner, setWinner] = useState<Color | null>(null);
+  const [report, setReport] = useState<BlunderReport | null>(null);
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
   const handlePrevState = () => setStateIndex((prev) => Math.max(prev - 1, 0));
   const handleNextState = () =>
     setStateIndex((prev) => Math.min(prev + 1, latestStateIndex));
+
+  useEffect(() => {
+    if (!gameId) {
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        let next = await getReview(gameId);
+        while (!cancelled) {
+          setReport(next);
+          if (next.complete) {
+            return;
+          }
+          const cursor = next.through_index;
+          next = await getReview(gameId);
+          if (next.through_index === cursor) {
+            return;
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setReviewError("The review stopped before this game was finished.");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [gameId]);
 
   useEffect(() => {
     if (!gameId) return;
@@ -65,6 +98,11 @@ function ReplayScreen() {
       <ZoomableBoard replayMode={true} />
       <LeftDrawer />
       <RightDrawer>
+        <ReviewPanel
+          report={report}
+          error={reviewError}
+          onSelectPly={setStateIndex}
+        />
         <ReplayBox
           stateIndex={stateIndex}
           latestStateIndex={latestStateIndex}

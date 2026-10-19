@@ -20,6 +20,7 @@ from catan_coach.domain.analysis import analyze
 from catan_coach.domain.prediction import WinProbabilityModel
 from catan_coach.engine.features import feature_names, public_vp_indices
 from catan_coach.engine.position import EnginePosition
+from catan_coach.engine.review import advance_blunder_report
 from catan_coach.models.baselines import VictoryPointShareModel
 
 _PROJECT_ROOT = Path(__file__).parents[3]
@@ -37,6 +38,7 @@ def create_local_app(
     testing: bool = False,
 ) -> Flask:
     database_path.parent.mkdir(parents=True, exist_ok=True)
+    review_cache = database_path.parent / "reviews"
     # Upstream routes call this module function directly and offer no app-level hook.
     catanatron_api._perspective = _local_perspective
     app = cast(
@@ -113,6 +115,25 @@ def create_local_app(
                     for row in result.ranked
                 ],
             }
+        )
+
+    @app.get("/api/games/<string:game_id>/review")
+    def game_review(game_id: str) -> ResponseReturnValue:
+        game = get_game_state(game_id)
+        if game is None:
+            abort(404, description="Resource not found")
+        batch = request.args.get("batch", "25")
+        if not batch.isdigit() or int(batch) < 1:
+            abort(400, description="batch must be a positive integer")
+        model, fallback = _load_analysis_model(len(game.state.colors), model_path)
+        return jsonify(
+            advance_blunder_report(
+                game_id,
+                model=model,
+                fallback=fallback,
+                cache_dir=review_cache,
+                batch_size=int(batch),
+            )
         )
 
     @app.get("/")

@@ -10,6 +10,7 @@ import type {
   ResourceCard,
   TileCoordinate,
 } from "./api.types";
+import { describeFreqdeck } from "./trade";
 import type { GameState } from "./api.types";
 
 export function humanizeActionRecord(
@@ -85,6 +86,18 @@ export function humanizeActionRecord(
       const label = humanizeTradeAction(action as MaritimeTradeAction);
       return `${player} TRADED ${label}`;
     }
+    case "OFFER_TRADE": {
+      const value = action[2] as number[];
+      return `${player} OFFERED ${describeFreqdeck(value.slice(0, 5))} FOR ${describeFreqdeck(value.slice(5, 10))}`;
+    }
+    case "ACCEPT_TRADE":
+      return `${player} ACCEPTED THE TRADE`;
+    case "REJECT_TRADE":
+      return `${player} REFUSED THE TRADE`;
+    case "CONFIRM_TRADE":
+      return `${player} CONFIRMED THE TRADE`;
+    case "CANCEL_TRADE":
+      return `${player} CANCELLED THE TRADE`;
     case "END_TURN":
       return `${player} ENDED TURN`;
     default:
