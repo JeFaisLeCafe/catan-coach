@@ -8,6 +8,40 @@ $dark-divider: rgb(0 0 0 / 80%);
     background: variables.$dark-gray;
   }
 
+  .play-mode-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: variables.$sm-gutter;
+    font-size: 0.85rem;
+  }
+
+  .analysis-panel {
+    padding: 0 variables.$sm-gutter variables.$sm-gutter;
+    font-size: 0.8rem;
+  }
+
+  .analysis-notice,
+  .analysis-forced {
+    margin: 0 0 variables.$sm-gutter;
+  }
+
+  .analysis-meta {
+    margin: 0 0 variables.$sm-gutter;
+    color: #bbb;
+  }
+
+  .analysis-actions {
+    margin: 0;
+    padding-left: 1.2rem;
+  }
+
+  .analysis-loss,
+  .analysis-reason {
+    color: #bbb;
+  }
+
   .MuiDivider-root {
     background: $dark-divider;
   }

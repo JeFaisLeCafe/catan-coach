@@ -155,3 +155,67 @@ def test_reduced_target_human_vs_bots_game_completes_and_is_durable(
     [saved_game] = client.get("/api/games").get_json()
     assert saved_game["status"] == "finished"
     assert saved_game["winning_color"] == state["winning_color"]
+
+
+@pytest.mark.engine
+def test_live_analysis_uses_a_labelled_fallback_without_changing_the_game(
+    tmp_path: Path,
+) -> None:
+    app = create_local_app(
+        database_path=tmp_path / "games.sqlite",
+        web_root=tmp_path,
+        model_path=tmp_path / "missing-model.txt",
+        testing=True,
+    )
+    client = app.test_client()
+    game_id = client.post(
+        "/api/games",
+        json={"players": ["HUMAN", "R", "R"]},
+    ).get_json()["game_id"]
+    before = client.get(f"/api/games/{game_id}/states/latest").get_json()
+
+    response = client.get(f"/api/games/{game_id}/analysis")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["seat"] == before["current_color"]
+    assert payload["model"] == "vp-share(T=2.0)"
+    assert payload["fallback"] is True
+    assert "No trained model" in payload["notice"]
+    assert payload["forced"] is (len(payload["actions"]) == 1)
+    assert all(
+        {"action", "win_probability", "loss", "reasons"} <= row.keys() for row in payload["actions"]
+    )
+    after = client.get(f"/api/games/{game_id}/states/latest").get_json()
+    assert after["state_index"] == before["state_index"]
+    assert after["action_records"] == before["action_records"]
+
+
+@pytest.mark.engine
+def test_live_analysis_rejects_a_finished_game(tmp_path: Path) -> None:
+    app = create_local_app(
+        database_path=tmp_path / "games.sqlite",
+        web_root=tmp_path,
+        model_path=tmp_path / "missing-model.txt",
+        testing=True,
+    )
+    client = app.test_client()
+    game_id = client.post(
+        "/api/games",
+        json={"players": ["HUMAN", "R", "R"], "vps_to_win": 3},
+    ).get_json()["game_id"]
+
+    for _ in range(1_000):
+        state = client.get(f"/api/games/{game_id}/states/latest").get_json()
+        if state["winning_color"] is not None:
+            break
+        action = None
+        if state["current_color"] not in state["bot_colors"]:
+            action = state["current_playable_actions"][0]
+        client.post(f"/api/games/{game_id}/actions", json=action)
+    else:
+        pytest.fail("Reduced-target game did not finish")
+
+    response = client.get(f"/api/games/{game_id}/analysis")
+
+    assert response.status_code == 409

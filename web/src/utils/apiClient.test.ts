@@ -1,6 +1,12 @@
 import { beforeEach, expect, test, vi } from "vitest";
 
-import { createGame, getGames, getState, postAction } from "./apiClient";
+import {
+  createGame,
+  getAnalysis,
+  getGames,
+  getState,
+  postAction,
+} from "./apiClient";
 import { makeGameState } from "../test/fixtures";
 
 const http = vi.hoisted(() => ({
@@ -37,6 +43,29 @@ test("uses the local game API contract", async () => {
     "ROLL",
     null,
   ]);
+});
+
+test("loads live Analysis without posting an Action", async () => {
+  const analysis = {
+    seat: "BLUE",
+    model: "vp-share(T=2.0)",
+    fallback: true,
+    notice: "No trained model is available; using the vp-share Baseline.",
+    forced: false,
+    actions: [
+      {
+        action: "ROLL",
+        win_probability: 0.42,
+        loss: 0,
+        reasons: [{ label: "production", delta: 0.01 }],
+      },
+    ],
+  };
+  http.get.mockResolvedValueOnce({ data: analysis });
+
+  await expect(getAnalysis("game-123")).resolves.toEqual(analysis);
+  expect(http.get).toHaveBeenCalledWith("/api/games/game-123/analysis");
+  expect(http.post).not.toHaveBeenCalled();
 });
 
 test("translates browser setup options for game creation", async () => {

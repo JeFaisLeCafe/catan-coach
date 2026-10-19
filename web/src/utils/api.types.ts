@@ -156,6 +156,27 @@ export type GameState = {
   resource_freqdeck: number[];
   development_listdeck: Record<string, number>;
 };
+
+export type AnalysisReason = {
+  label: string;
+  delta: number;
+};
+
+export type RankedAnalysisAction = {
+  action: string;
+  win_probability: number;
+  loss: number;
+  reasons: AnalysisReason[];
+};
+
+export type LiveAnalysis = {
+  seat: Color;
+  model: string;
+  fallback: boolean;
+  notice: string | null;
+  forced: boolean;
+  actions: RankedAnalysisAction[];
+};
 const DIRECTIONS = [
   "NORTH",
   "NORTHEAST",

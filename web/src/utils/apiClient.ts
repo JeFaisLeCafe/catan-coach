@@ -1,7 +1,7 @@
 import axios from "axios";
 
 import { API_URL } from "../configuration";
-import type { Color, GameAction, GameState } from "./api.types";
+import type { Color, GameAction, GameState, LiveAnalysis } from "./api.types";
 
 /** A registry key, e.g. "CATANATRON" or "AB". The server decides what exists. */
 export type PlayerKey = string;
@@ -83,6 +83,13 @@ export async function getState(
 ): Promise<GameState> {
   const response = await axios.get(
     `${API_URL}/api/games/${gameId}/states/${stateIndex}`,
+  );
+  return response.data;
+}
+
+export async function getAnalysis(gameId: string): Promise<LiveAnalysis> {
+  const response = await axios.get<LiveAnalysis>(
+    `${API_URL}/api/games/${gameId}/analysis`,
   );
   return response.data;
 }

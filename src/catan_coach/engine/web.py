@@ -16,9 +16,16 @@ from flask import Flask, abort, jsonify, request, send_from_directory
 from flask.typing import ResponseReturnValue
 from sqlalchemy import select
 
+from catan_coach.domain.analysis import analyze
+from catan_coach.domain.prediction import WinProbabilityModel
+from catan_coach.engine.features import feature_names, public_vp_indices
+from catan_coach.engine.position import EnginePosition
+from catan_coach.models.baselines import VictoryPointShareModel
+
 _PROJECT_ROOT = Path(__file__).parents[3]
 _DEFAULT_WEB_ROOT = _PROJECT_ROOT / "web" / "dist"
 _DEFAULT_DATABASE_PATH = Path.home() / ".catan-coach" / "games.sqlite"
+_DEFAULT_MODEL_PATH = _PROJECT_ROOT / "model.txt"
 _UPSTREAM_PERSPECTIVE = catanatron_api._perspective
 
 
@@ -26,6 +33,7 @@ def create_local_app(
     *,
     database_path: Path = _DEFAULT_DATABASE_PATH,
     web_root: Path = _DEFAULT_WEB_ROOT,
+    model_path: Path = _DEFAULT_MODEL_PATH,
     testing: bool = False,
 ) -> Flask:
     database_path.parent.mkdir(parents=True, exist_ok=True)
@@ -71,6 +79,42 @@ def create_local_app(
         colors = [player.color.value for player in game.state.players if not player.is_bot]
         return jsonify({"color": colors[0] if len(colors) == 1 else None})
 
+    @app.get("/api/games/<string:game_id>/analysis")
+    def live_analysis(game_id: str) -> ResponseReturnValue:
+        game = get_game_state(game_id)
+        if game is None:
+            abort(404, description="Resource not found")
+        if game.winning_color() is not None:
+            abort(409, description="Finished games have no live Analysis")
+
+        position = EnginePosition(game)
+        model, fallback = _load_analysis_model(position.num_players, model_path)
+        result = analyze(position, model)
+        return jsonify(
+            {
+                "seat": result.seat.name,
+                "model": model.name,
+                "fallback": fallback,
+                "notice": (
+                    "No trained model is available; using the vp-share Baseline."
+                    if fallback
+                    else None
+                ),
+                "forced": result.is_forced,
+                "actions": [
+                    {
+                        "action": row.action.label,
+                        "win_probability": row.win_probability,
+                        "loss": row.loss,
+                        "reasons": [
+                            {"label": reason.label, "delta": reason.delta} for reason in row.reasons
+                        ],
+                    }
+                    for row in result.ranked
+                ],
+            }
+        )
+
     @app.get("/")
     @app.get("/<path:requested_path>")
     def serve_browser(requested_path: str = "") -> ResponseReturnValue:
@@ -83,6 +127,23 @@ def create_local_app(
         abort(503, description="Browser assets are not built")
 
     return app
+
+
+def _load_analysis_model(
+    num_players: int,
+    model_path: Path,
+) -> tuple[WinProbabilityModel, bool]:
+    if model_path.is_file():
+        from catan_coach.models.gbdt import GbdtModel
+
+        return (
+            GbdtModel.load(
+                model_path,
+                feature_names=feature_names(num_players),
+            ),
+            False,
+        )
+    return VictoryPointShareModel(public_vp_indices(num_players)), True
 
 
 def _local_perspective(game: Game) -> str | None:

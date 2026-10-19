@@ -6,11 +6,14 @@ import Drawer from "@mui/material/Drawer";
 
 import Hidden from "./Hidden";
 import PlayerStateBox from "./PlayerStateBox";
+import PlayModeToggle from "./PlayModeToggle";
+import AnalysisPanel from "./AnalysisPanel";
 import { humanizeActionRecord } from "../utils/promptUtils";
 import { store } from "../store";
 import ACTIONS from "../actions";
 import { getHumanColor, playerKey } from "../utils/stateUtils";
-import { type GameState } from "../utils/api.types";
+import { type GameState, type LiveAnalysis } from "../utils/api.types";
+import { type PlayMode } from "../utils/playMode";
 import { isTabOrShift, type InteractionEvent } from "../utils/events";
 
 import "./LeftDrawer.scss";
@@ -30,7 +33,17 @@ function SeatLabel({ gameState }: { gameState: GameState }) {
   );
 }
 
-function DrawerContent({ gameState }: { gameState: GameState }) {
+function DrawerContent({
+  gameState,
+  playMode,
+  onPlayModeChange,
+  analysis,
+}: {
+  gameState: GameState;
+  playMode?: PlayMode;
+  onPlayModeChange?: (mode: PlayMode) => void;
+  analysis?: LiveAnalysis | null;
+}) {
   const playerSections = gameState.colors.map((color) => {
     const key = playerKey(gameState, color);
     return (
@@ -47,7 +60,11 @@ function DrawerContent({ gameState }: { gameState: GameState }) {
 
   return (
     <>
+      {playMode && onPlayModeChange && (
+        <PlayModeToggle mode={playMode} onChange={onPlayModeChange} />
+      )}
       <SeatLabel gameState={gameState} />
+      {analysis && <AnalysisPanel analysis={analysis} />}
       {playerSections}
       <div className="log">
         {gameState.action_records
@@ -66,7 +83,15 @@ function DrawerContent({ gameState }: { gameState: GameState }) {
   );
 }
 
-export default function LeftDrawer() {
+export default function LeftDrawer({
+  playMode,
+  onPlayModeChange,
+  analysis,
+}: {
+  playMode?: PlayMode;
+  onPlayModeChange?: (mode: PlayMode) => void;
+  analysis?: LiveAnalysis | null;
+} = {}) {
   const { state, dispatch } = useContext(store);
   const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
@@ -104,7 +129,12 @@ export default function LeftDrawer() {
           disableDiscovery={iOS}
           onKeyDown={closeLeftDrawer}
         >
-          <DrawerContent gameState={state.gameState as GameState} />
+          <DrawerContent
+            gameState={state.gameState as GameState}
+            playMode={playMode}
+            onPlayModeChange={onPlayModeChange}
+            analysis={analysis}
+          />
         </SwipeableDrawer>
       </Hidden>
       <Hidden
@@ -112,7 +142,12 @@ export default function LeftDrawer() {
         implementation="css"
       >
         <Drawer className="left-drawer" anchor="left" variant="permanent" open>
-          <DrawerContent gameState={state.gameState as GameState} />
+          <DrawerContent
+            gameState={state.gameState as GameState}
+            playMode={playMode}
+            onPlayModeChange={onPlayModeChange}
+            analysis={analysis}
+          />
         </Drawer>
       </Hidden>
     </>

@@ -12,7 +12,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import { StateProvider, store } from "../store";
 import type { GameState } from "../utils/api.types";
-import { getState, postAction } from "../utils/apiClient";
+import { getAnalysis, getState, postAction } from "../utils/apiClient";
 import { dispatchSnackbar } from "../components/Snackbar";
 import { makeGameState } from "../test/fixtures";
 import GameScreen from "./GameScreen";
@@ -25,6 +25,7 @@ const snackbar = vi.hoisted(() => ({
 vi.mock("../utils/apiClient", () => ({
   getState: vi.fn(),
   postAction: vi.fn(),
+  getAnalysis: vi.fn(),
 }));
 vi.mock("../components/Snackbar", () => ({
   dispatchSnackbar: vi.fn(),
@@ -96,8 +97,32 @@ function renderGameScreen({
   return render(strictMode ? <StrictMode>{screen}</StrictMode> : screen);
 }
 
+const fallbackAnalysis = {
+  seat: "BLUE" as const,
+  model: "vp-share(T=2.0)",
+  fallback: true,
+  notice: "No trained model is available; using the vp-share Baseline.",
+  forced: false,
+  actions: [
+    {
+      action: "ROLL",
+      win_probability: 0.51,
+      loss: 0,
+      reasons: [{ label: "production", delta: 0.02 }],
+    },
+    {
+      action: "END_TURN",
+      win_probability: 0.4,
+      loss: 0.11,
+      reasons: [{ label: "points", delta: -0.03 }],
+    },
+  ],
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
+  window.localStorage.clear();
+  vi.mocked(getAnalysis).mockResolvedValue(fallbackAnalysis);
 });
 
 afterEach(() => {
@@ -241,6 +266,99 @@ test("loads a historical state without advancing bots in replay mode", async () 
   expect(
     screen.queryByRole("button", { name: "ROLL" }),
   ).not.toBeInTheDocument();
+});
+
+function coachModeSwitch() {
+  return screen.getAllByRole("switch", { name: "Coach Mode" })[0];
+}
+
+test("defaults live play to Challenge Mode without fetching Analysis", async () => {
+  vi.mocked(getState).mockResolvedValue(baseState);
+
+  renderGameScreen();
+
+  expect(
+    await screen.findByRole("switch", { name: "Coach Mode" }),
+  ).not.toBeChecked();
+  expect(screen.queryByText("ROLL 51.0%")).not.toBeInTheDocument();
+  expect(getAnalysis).not.toHaveBeenCalled();
+  expect(postAction).not.toHaveBeenCalled();
+});
+
+test("Coach Mode ranks Actions and Challenge Mode hides them again", async () => {
+  vi.mocked(getState).mockResolvedValue(baseState);
+
+  renderGameScreen();
+  await screen.findAllByRole("switch", { name: "Coach Mode" });
+
+  fireEvent.click(coachModeSwitch());
+
+  expect(coachModeSwitch()).toBeChecked();
+  expect(await screen.findAllByText("ROLL 51.0%")).not.toHaveLength(0);
+  expect(screen.getAllByText("END_TURN 40.0%").length).toBeGreaterThan(0);
+  expect(
+    screen.getAllByText(
+      "No trained model is available; using the vp-share Baseline.",
+    ).length,
+  ).toBeGreaterThan(0);
+  expect(
+    screen.getAllByText("Seat BLUE · vp-share(T=2.0)").length,
+  ).toBeGreaterThan(0);
+  expect(getAnalysis).toHaveBeenCalledWith("game-123");
+  expect(postAction).not.toHaveBeenCalled();
+
+  fireEvent.click(coachModeSwitch());
+
+  expect(coachModeSwitch()).not.toBeChecked();
+  expect(screen.queryByText("ROLL 51.0%")).not.toBeInTheDocument();
+  expect(window.localStorage.getItem("catan-coach.playMode.game-123")).toBe(
+    "challenge",
+  );
+});
+
+test("restores Coach Mode for a game after reload", async () => {
+  window.localStorage.setItem("catan-coach.playMode.game-123", "coach");
+  vi.mocked(getState).mockResolvedValue(baseState);
+
+  renderGameScreen();
+
+  expect(
+    await screen.findByRole("switch", { name: "Coach Mode", checked: true }),
+  ).toBeChecked();
+  expect(await screen.findAllByText("ROLL 51.0%")).not.toHaveLength(0);
+  expect(getAnalysis).toHaveBeenCalledWith("game-123");
+});
+
+test("presents a forced Action as forced instead of a choice", async () => {
+  window.localStorage.setItem("catan-coach.playMode.game-123", "coach");
+  vi.mocked(getState).mockResolvedValue(baseState);
+  vi.mocked(getAnalysis).mockResolvedValue({
+    ...fallbackAnalysis,
+    forced: true,
+    actions: [fallbackAnalysis.actions[0]],
+  });
+
+  renderGameScreen();
+
+  expect(await screen.findAllByText("This Action is forced")).not.toHaveLength(
+    0,
+  );
+});
+
+test("hides the Challenge/Coach toggle in replay", async () => {
+  vi.mocked(getState).mockResolvedValue(makeGameState({ state_index: 7 }));
+
+  renderGameScreen({
+    initialEntry: "/games/game-123/states/7",
+    routePath: "/games/:gameId/states/:stateIndex",
+    replayMode: true,
+  });
+
+  expect(await screen.findByTestId("board")).toBeInTheDocument();
+  expect(
+    screen.queryByRole("switch", { name: "Coach Mode" }),
+  ).not.toBeInTheDocument();
+  expect(getAnalysis).not.toHaveBeenCalled();
 });
 
 test("opens a finished game in replay", async () => {
