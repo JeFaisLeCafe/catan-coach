@@ -95,12 +95,23 @@ def test_a_crash_mid_run_keeps_games_already_written(
     real = corpus_mod._sample_game
 
     def flaky(
-        game_id: int, ply_stride: int, max_turns: int
+        game_id: int,
+        ply_stride: int,
+        max_turns: int,
+        *,
+        players: str,
+        model_path: str,
     ) -> tuple[str, list[tuple[int, str, np.ndarray]]] | None:
         calls["n"] += 1
         if calls["n"] > 1:
             raise RuntimeError("interrupted")
-        return real(game_id, ply_stride, max_turns)
+        return real(
+            game_id,
+            ply_stride,
+            max_turns,
+            players=players,
+            model_path=model_path,
+        )
 
     monkeypatch.setattr(corpus_mod, "_sample_game", flaky)
     with pytest.raises(RuntimeError, match="interrupted"):

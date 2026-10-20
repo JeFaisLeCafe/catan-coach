@@ -92,6 +92,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     corpus_parser.add_argument("--workers", type=int, default=os.cpu_count() or 1)
     corpus_parser.add_argument("--seed", type=int, default=0)
     corpus_parser.add_argument(
+        "--players",
+        choices=("value", "model"),
+        default="value",
+        help="who plays the games: the value-function bot, or a saved model",
+    )
+    corpus_parser.add_argument(
+        "--model",
+        type=Path,
+        help="saved model used when --players model",
+    )
+    corpus_parser.add_argument(
         "--validation-fraction",
         type=float,
         default=DEFAULT_VALIDATION_FRACTION,
@@ -184,6 +195,8 @@ def _run_corpus(args: argparse.Namespace) -> int:
         seed=args.seed,
         workers=args.workers,
         validation_fraction=args.validation_fraction,
+        players=args.players,
+        model_path=args.model,
     )
     print(format_summary(summary))
     return 0

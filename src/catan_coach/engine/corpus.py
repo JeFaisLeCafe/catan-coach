@@ -20,6 +20,8 @@ from catan_coach.domain.corpus import (
     split_for_game,
 )
 from catan_coach.engine.features import feature_vector
+from catan_coach.engine.model_player import WinProbabilityPlayer
+from catan_coach.models.gbdt import GbdtModel
 
 COLORS = (Color.RED, Color.BLUE, Color.WHITE, Color.ORANGE)
 _GAMES_DIR = "games"
@@ -34,6 +36,8 @@ class _Job:
     output_dir: str
     seed: int
     validation_fraction: float
+    players: str
+    model_path: str
 
 
 def generate_corpus(
@@ -45,6 +49,8 @@ def generate_corpus(
     workers: int = 1,
     validation_fraction: float = DEFAULT_VALIDATION_FRACTION,
     max_turns: int | None = None,
+    players: str = "value",
+    model_path: Path | str | None = None,
 ) -> CorpusSummary:
     if n_games < 1:
         raise ValueError("n_games must be at least 1")
@@ -55,6 +61,11 @@ def generate_corpus(
     limit = TURNS_LIMIT if max_turns is None else max_turns
     if limit < 0:
         raise ValueError("max_turns must be non-negative")
+    if players not in {"value", "model"}:
+        raise ValueError("players must be 'value' or 'model'")
+    if players == "model" and (model_path is None or not Path(model_path).is_file()):
+        raise ValueError("model self-play needs a saved model file")
+    model_file = "" if model_path is None else str(model_path)
 
     root = Path(output_dir)
     (root / _GAMES_DIR).mkdir(parents=True, exist_ok=True)
@@ -72,6 +83,8 @@ def generate_corpus(
             output_dir=str(root),
             seed=seed,
             validation_fraction=validation_fraction,
+            players=players,
+            model_path=model_file,
         )
         for game_id in range(seed, seed + n_games)
         if game_id not in finished and game_id not in already_dropped
@@ -108,7 +121,13 @@ def _run(jobs: list[_Job], workers: int) -> None:
 
 
 def _play_and_persist(job: _Job) -> None:
-    sampled = _sample_game(job.game_id, job.ply_stride, job.max_turns)
+    sampled = _sample_game(
+        job.game_id,
+        job.ply_stride,
+        job.max_turns,
+        players=job.players,
+        model_path=job.model_path,
+    )
     root = Path(job.output_dir)
     if sampled is None:
         (root / _DROPPED_DIR / f"{job.game_id:05d}").write_text("")
@@ -122,9 +141,14 @@ def _play_and_persist(job: _Job) -> None:
 
 
 def _sample_game(
-    game_id: int, ply_stride: int, max_turns: int
+    game_id: int,
+    ply_stride: int,
+    max_turns: int,
+    *,
+    players: str,
+    model_path: str,
 ) -> tuple[str, list[tuple[int, str, np.ndarray]]] | None:
-    game = Game([ValueFunctionPlayer(color) for color in COLORS], seed=game_id)
+    game = Game(_seat_players(players, model_path), seed=game_id)
     samples: list[tuple[int, str, np.ndarray]] = []
     ply = 0
     while game.winning_color() is None and game.state.num_turns < max_turns:
@@ -137,6 +161,26 @@ def _sample_game(
     if winner is None:
         return None
     return winner.name, samples
+
+
+_CACHED_MODEL: GbdtModel | None = None
+_CACHED_MODEL_PATH = ""
+
+
+def _seat_players(
+    players: str, model_path: str
+) -> list[ValueFunctionPlayer | WinProbabilityPlayer]:
+    if players == "value":
+        return [ValueFunctionPlayer(color) for color in COLORS]
+    return [WinProbabilityPlayer(color, _load_model(model_path)) for color in COLORS]
+
+
+def _load_model(model_path: str) -> GbdtModel:
+    global _CACHED_MODEL, _CACHED_MODEL_PATH
+    if _CACHED_MODEL is None or model_path != _CACHED_MODEL_PATH:
+        _CACHED_MODEL = GbdtModel.load(model_path)
+        _CACHED_MODEL_PATH = model_path
+    return _CACHED_MODEL
 
 
 def _rows_to_frame(
