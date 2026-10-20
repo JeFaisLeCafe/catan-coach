@@ -215,6 +215,33 @@ export type PositionLines = {
   lines: PositionLine[];
 };
 
+export type SearchLine = {
+  action: string;
+  summary?: string;
+  win_probability: number;
+  loss: number;
+  visits: number;
+  reasons: AnalysisReason[];
+};
+
+export type SearchSnapshot = {
+  job_id: string;
+  running: boolean;
+  state_index: number;
+  source: "immediate" | "search";
+  seat: Color;
+  model: string;
+  fallback: boolean;
+  notice: string | null;
+  forced: boolean;
+  simulations: number;
+  nodes: number;
+  elapsed: number;
+  horizon: number;
+  uncertainty: number;
+  lines: SearchLine[];
+};
+
 export type DecisionGrade = "best" | "near-tie" | "mistake" | "blunder";
 
 export type ReviewedDecision = {

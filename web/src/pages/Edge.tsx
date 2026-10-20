@@ -23,6 +23,7 @@ type EdgeProps = {
   direction: Direction;
   color: Color | null;
   flashing: boolean;
+  spotlight?: boolean;
   onClick: React.MouseEventHandler;
 };
 
@@ -34,6 +35,7 @@ export default function Edge({
   direction,
   color,
   flashing,
+  spotlight = false,
   onClick,
 }: EdgeProps) {
   const [centerX, centerY] = center;
@@ -53,7 +55,7 @@ export default function Edge({
       onClick={onClick}
     >
       {color && <Road color={color} />}
-      {flashing && <div className="pulse"></div>}
+      {flashing && <div className={cn("pulse", { spotlight })}></div>}
     </div>
   );
 }

@@ -31,10 +31,23 @@
     border-left-width: 4px;
     border-left-color: #7dcea0;
     border-radius: 4px;
+    cursor: pointer;
+
+    &:hover {
+      background: rgba(246, 201, 69, 0.12);
+    }
   }
 
   .is-played {
     border-left-color: #e6b15a;
+  }
+
+  .search-status {
+    color: #bbb;
+  }
+
+  .search-status.is-search {
+    color: #7dcea0;
   }
 
   .position-rank {

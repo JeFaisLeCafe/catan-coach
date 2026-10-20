@@ -141,6 +141,7 @@ type TileProps = {
   size: number;
   onClick?: React.MouseEventHandler<HTMLDivElement>;
   flashing: boolean;
+  spotlight?: boolean;
 };
 
 export default function Tile({
@@ -150,6 +151,7 @@ export default function Tile({
   size,
   onClick,
   flashing,
+  spotlight = false,
 }: TileProps) {
   const w = SQRT3 * size;
   const h = 2 * size;
@@ -171,7 +173,7 @@ export default function Tile({
   return (
     <div
       key={coordinate.join(",")}
-      className="tile"
+      className={cn("tile", { spotlight })}
       style={{
         left: x - w / 2,
         top: y - h / 2,

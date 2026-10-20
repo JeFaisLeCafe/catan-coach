@@ -2,6 +2,7 @@ import classnames from "classnames";
 
 import { SQRT3 } from "../utils/coordinates";
 import type { GameAction, GameState, TileCoordinate } from "../utils/api.types";
+import { sameEdge, type BoardHighlight } from "../utils/boardTarget";
 import Tile from "./Tile";
 import Node from "./Node";
 import Edge, { toEdgeId, type EdgeId } from "./Edge";
@@ -50,6 +51,7 @@ type BoardProps = {
   show: boolean;
   isMovingRobber: boolean;
   robberCoordinates?: Set<string>;
+  highlight?: BoardHighlight;
 };
 
 export default function Board({
@@ -66,6 +68,7 @@ export default function Board({
   show,
   isMovingRobber,
   robberCoordinates,
+  highlight,
 }: BoardProps) {
   // TODO: Keep in sync with CSS
   const containerHeight = height - 144 - 38 - 40;
@@ -76,56 +79,71 @@ export default function Board({
     return null;
   }
 
-  const tiles = gameState.tiles.map(({ coordinate, tile }) => (
-    <Tile
-      key={`${coordinate}`}
-      center={center}
-      coordinate={coordinate}
-      tile={tile}
-      size={size}
-      flashing={!!robberCoordinates?.has(`${coordinate}`)}
-      onClick={
-        !isMovingRobber || robberCoordinates?.has(`${coordinate}`)
-          ? () => handleTileClick(coordinate)
-          : undefined
-      }
-    />
-  ));
-  const nodes = Object.values(gameState.nodes).map(
-    ({ color, building, direction, tile_coordinate, id }) => (
-      <Node
-        key={id}
+  const tiles = gameState.tiles.map(({ coordinate, tile }) => {
+    const tileKey = `${coordinate}`;
+    const spotlight = highlight?.tileKey === tileKey;
+    return (
+      <Tile
+        key={tileKey}
         center={center}
+        coordinate={coordinate}
+        tile={tile}
         size={size}
-        coordinate={tile_coordinate}
-        direction={direction}
-        building={building}
-        color={color}
-        flashing={!replayMode && !!nodeActions && id in nodeActions}
-        onClick={buildOnNodeClick(
-          id,
-          nodeActions ? nodeActions[id] : undefined,
-        )}
+        flashing={spotlight || !!robberCoordinates?.has(tileKey)}
+        spotlight={spotlight}
+        onClick={
+          !isMovingRobber || robberCoordinates?.has(`${coordinate}`)
+            ? () => handleTileClick(coordinate)
+            : undefined
+        }
       />
-    ),
+    );
+  });
+  const nodes = Object.values(gameState.nodes).map(
+    ({ color, building, direction, tile_coordinate, id }) => {
+      const spotlight = highlight?.nodeId === id;
+      return (
+        <Node
+          key={id}
+          center={center}
+          size={size}
+          coordinate={tile_coordinate}
+          direction={direction}
+          building={building}
+          color={color}
+          flashing={
+            spotlight || (!replayMode && !!nodeActions && id in nodeActions)
+          }
+          spotlight={spotlight}
+          onClick={buildOnNodeClick(
+            id,
+            nodeActions ? nodeActions[id] : undefined,
+          )}
+        />
+      );
+    },
   );
   const edges = Object.values(gameState.edges).map(
-    ({ color, direction, tile_coordinate, id }) => (
-      <Edge
-        id={`${id[0]},${id[1]}`}
-        key={`${id}`}
-        center={center}
-        size={size}
-        coordinate={tile_coordinate}
-        direction={direction}
-        color={color}
-        flashing={!!edgeActions && toEdgeId(id) in edgeActions}
-        onClick={buildOnEdgeClick(
-          id,
-          edgeActions ? edgeActions[toEdgeId(id)] : undefined,
-        )}
-      />
-    ),
+    ({ color, direction, tile_coordinate, id }) => {
+      const spotlight = sameEdge(id, highlight?.edgeId ?? null);
+      return (
+        <Edge
+          id={`${id[0]},${id[1]}`}
+          key={`${id}`}
+          center={center}
+          size={size}
+          coordinate={tile_coordinate}
+          direction={direction}
+          color={color}
+          flashing={spotlight || (!!edgeActions && toEdgeId(id) in edgeActions)}
+          spotlight={spotlight}
+          onClick={buildOnEdgeClick(
+            id,
+            edgeActions ? edgeActions[toEdgeId(id)] : undefined,
+          )}
+        />
+      );
+    },
   );
   return (
     <div className={classnames("board", { show })}>

@@ -1,4 +1,8 @@
-import type { PositionLines as PositionLinesReport } from "../utils/api.types";
+import type {
+  PositionLines as PositionLinesReport,
+  SearchSnapshot,
+} from "../utils/api.types";
+import SearchStatus from "./SearchStatus";
 
 import "./PositionLines.scss";
 
@@ -9,13 +13,27 @@ function formatPercent(value: number): string {
 export default function PositionLines({
   lines,
   error,
+  snapshot,
+  onStop,
+  onHoverAction,
 }: {
   lines: PositionLinesReport | null;
   error?: string | null;
+  snapshot?: SearchSnapshot | null;
+  onStop?: () => void;
+  onHoverAction?: (action: string | null) => void;
 }) {
   return (
-    <section className="position-lines" aria-label="Position lines">
+    <section
+      className={
+        snapshot?.source === "search"
+          ? "position-lines is-search"
+          : "position-lines is-immediate"
+      }
+      aria-label="Position lines"
+    >
       <h3>This position</h3>
+      {snapshot && <SearchStatus snapshot={snapshot} onStop={onStop} />}
       {error && <p>{error}</p>}
       {!lines && !error && <p>Reading this position…</p>}
       {lines && lines.lines.length === 0 && <p>No legal Action.</p>}
@@ -34,6 +52,8 @@ export default function PositionLines({
                 <li
                   key={line.action}
                   className={played ? "is-played" : undefined}
+                  onMouseEnter={() => onHoverAction?.(line.action)}
+                  onMouseLeave={() => onHoverAction?.(null)}
                 >
                   <span className="position-rank">
                     {rank ?? "Played"}

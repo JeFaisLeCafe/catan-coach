@@ -26,6 +26,7 @@ type NodeProps = {
   building: Building | null;
   color: Color | null;
   flashing: boolean;
+  spotlight?: boolean;
   onClick: React.MouseEventHandler<HTMLDivElement>;
 };
 
@@ -37,6 +38,7 @@ export default function Node({
   building,
   color,
   flashing,
+  spotlight = false,
   onClick,
 }: NodeProps) {
   const [centerX, centerY] = center;
@@ -60,7 +62,7 @@ export default function Node({
       onClick={onClick}
     >
       {color && <Building building={building} color={color} />}
-      {flashing && <div className="pulse"></div>}
+      {flashing && <div className={cn("pulse", { spotlight })}></div>}
       {/* {id} */}
     </div>
   );

@@ -172,6 +172,17 @@
   }
 }
 
+.pulse.spotlight:after {
+  background-color: #f6c945;
+  box-shadow: 0 0 14px 4px #f6c945;
+}
+
+.node .pulse.spotlight,
+.edge .pulse.spotlight {
+  width: 220%;
+  height: 220%;
+}
+
 .edge .pulse {
   width: 90%;
   height: 90%;

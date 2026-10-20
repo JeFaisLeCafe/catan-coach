@@ -24,6 +24,11 @@ LINE_COUNT = 5
 _RESOURCE_VARIETY = 4 * 2.778 / 100
 
 
+def action_summaries(game: Game) -> dict[str, str]:
+    """A short reading of every legal Action, using the same wording as position lines."""
+    return {action_label(action): _view(game, action)[1] for action in game.playable_actions}
+
+
 def position_lines(
     game: Game,
     model: WinProbabilityModel,

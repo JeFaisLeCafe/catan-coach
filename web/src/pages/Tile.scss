@@ -25,6 +25,10 @@
   }
 }
 
+.tile.spotlight {
+  filter: drop-shadow(0 0 6px #f6c945);
+}
+
 @keyframes pulse {
   0% {
     box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.3);

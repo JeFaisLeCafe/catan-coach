@@ -8,11 +8,16 @@ import Hidden from "./Hidden";
 import PlayerStateBox from "./PlayerStateBox";
 import PlayModeToggle from "./PlayModeToggle";
 import AnalysisPanel from "./AnalysisPanel";
+import TimingSettings from "./TimingSettings";
 import { humanizeActionRecord } from "../utils/promptUtils";
 import { store } from "../store";
 import ACTIONS from "../actions";
 import { getHumanColor, playerKey } from "../utils/stateUtils";
-import { type GameState, type LiveAnalysis } from "../utils/api.types";
+import {
+  type GameState,
+  type LiveAnalysis,
+  type SearchSnapshot,
+} from "../utils/api.types";
 import { type PlayMode } from "../utils/playMode";
 import { isTabOrShift, type InteractionEvent } from "../utils/events";
 
@@ -38,11 +43,21 @@ function DrawerContent({
   playMode,
   onPlayModeChange,
   analysis,
+  snapshot,
+  onStopSearch,
+  onHoverAction,
+  presentationDelay,
+  onPresentationDelay,
 }: {
   gameState: GameState;
   playMode?: PlayMode;
   onPlayModeChange?: (mode: PlayMode) => void;
   analysis?: LiveAnalysis | null;
+  snapshot?: SearchSnapshot | null;
+  onStopSearch?: () => void;
+  onHoverAction?: (action: string | null) => void;
+  presentationDelay?: number;
+  onPresentationDelay?: (milliseconds: number) => void;
 }) {
   const playerSections = gameState.colors.map((color) => {
     const key = playerKey(gameState, color);
@@ -63,8 +78,21 @@ function DrawerContent({
       {playMode && onPlayModeChange && (
         <PlayModeToggle mode={playMode} onChange={onPlayModeChange} />
       )}
+      {presentationDelay !== undefined && onPresentationDelay && (
+        <TimingSettings
+          presentationDelay={presentationDelay}
+          onPresentationDelay={onPresentationDelay}
+        />
+      )}
       <SeatLabel gameState={gameState} />
-      {analysis && <AnalysisPanel analysis={analysis} />}
+      {(analysis || snapshot) && (
+        <AnalysisPanel
+          analysis={analysis}
+          snapshot={snapshot}
+          onStop={onStopSearch}
+          onHoverAction={onHoverAction}
+        />
+      )}
       {playerSections}
       <div className="log">
         {gameState.action_records
@@ -87,10 +115,20 @@ export default function LeftDrawer({
   playMode,
   onPlayModeChange,
   analysis,
+  snapshot,
+  onStopSearch,
+  onHoverAction,
+  presentationDelay,
+  onPresentationDelay,
 }: {
   playMode?: PlayMode;
   onPlayModeChange?: (mode: PlayMode) => void;
   analysis?: LiveAnalysis | null;
+  snapshot?: SearchSnapshot | null;
+  onStopSearch?: () => void;
+  onHoverAction?: (action: string | null) => void;
+  presentationDelay?: number;
+  onPresentationDelay?: (milliseconds: number) => void;
 } = {}) {
   const { state, dispatch } = useContext(store);
   const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
@@ -134,6 +172,11 @@ export default function LeftDrawer({
             playMode={playMode}
             onPlayModeChange={onPlayModeChange}
             analysis={analysis}
+            snapshot={snapshot}
+            onStopSearch={onStopSearch}
+            onHoverAction={onHoverAction}
+            presentationDelay={presentationDelay}
+            onPresentationDelay={onPresentationDelay}
           />
         </SwipeableDrawer>
       </Hidden>
@@ -147,6 +190,11 @@ export default function LeftDrawer({
             playMode={playMode}
             onPlayModeChange={onPlayModeChange}
             analysis={analysis}
+            snapshot={snapshot}
+            onStopSearch={onStopSearch}
+            onHoverAction={onHoverAction}
+            presentationDelay={presentationDelay}
+            onPresentationDelay={onPresentationDelay}
           />
         </Drawer>
       </Hidden>

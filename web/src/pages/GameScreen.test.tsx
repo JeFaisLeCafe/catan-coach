@@ -5,6 +5,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
 } from "@testing-library/react";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
@@ -12,7 +13,14 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import { StateProvider, store } from "../store";
 import type { GameState } from "../utils/api.types";
-import { getAnalysis, getState, postAction } from "../utils/apiClient";
+import {
+  getAnalysis,
+  getSearch,
+  getState,
+  postAction,
+  startSearch,
+  stopSearch,
+} from "../utils/apiClient";
 import { dispatchSnackbar } from "../components/Snackbar";
 import { makeGameState } from "../test/fixtures";
 import GameScreen from "./GameScreen";
@@ -26,6 +34,9 @@ vi.mock("../utils/apiClient", () => ({
   getState: vi.fn(),
   postAction: vi.fn(),
   getAnalysis: vi.fn(),
+  startSearch: vi.fn(),
+  getSearch: vi.fn(),
+  stopSearch: vi.fn(),
 }));
 vi.mock("../components/Snackbar", () => ({
   dispatchSnackbar: vi.fn(),
@@ -370,4 +381,163 @@ test("opens a finished game in replay", async () => {
 
   expect(await screen.findByText("Replay")).toBeInTheDocument();
   expect(postAction).not.toHaveBeenCalled();
+});
+
+const searching = {
+  job_id: "job-1",
+  running: true,
+  state_index: 12,
+  source: "immediate" as const,
+  seat: "BLUE" as const,
+  model: "gbdt",
+  fallback: false,
+  notice: null,
+  forced: false,
+  simulations: 0,
+  nodes: 0,
+  elapsed: 0,
+  horizon: 1,
+  uncertainty: 0,
+  lines: [
+    {
+      action: "ROLL",
+      win_probability: 0.51,
+      loss: 0,
+      visits: 0,
+      reasons: [],
+    },
+  ],
+};
+
+async function enableCoach() {
+  vi.mocked(getState).mockResolvedValue(baseState);
+  renderGameScreen();
+  await screen.findAllByRole("switch", { name: "Coach Mode" });
+  fireEvent.click(coachModeSwitch());
+}
+
+test("search keeps digging without blocking Actions", async () => {
+  vi.mocked(startSearch).mockResolvedValue(searching);
+  vi.mocked(getSearch).mockResolvedValue({
+    ...searching,
+    running: false,
+    source: "search",
+    simulations: 4,
+    nodes: 12,
+    elapsed: 0.4,
+    horizon: 2.5,
+    uncertainty: 0.02,
+    lines: [
+      {
+        action: "ROLL",
+        win_probability: 0.62,
+        loss: 0,
+        visits: 4,
+        reasons: [],
+      },
+    ],
+  });
+
+  await enableCoach();
+
+  expect(await screen.findAllByText(/4 simulations/)).not.toHaveLength(0);
+  expect(screen.getAllByText(/3 plies ahead/).length).toBeGreaterThan(0);
+  expect(screen.getAllByText("ROLL 62.0%").length).toBeGreaterThan(0);
+  expect(screen.queryByText(/depth/i)).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("radio", { name: "5 seconds" }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByTestId("board")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "ROLL" })).toBeEnabled();
+  expect(postAction).not.toHaveBeenCalled();
+  expect(startSearch).toHaveBeenCalledWith(
+    "game-123",
+    expect.objectContaining({ mode: "continuous", state_index: 12 }),
+  );
+});
+
+test("stopping a continuous search keeps the latest ranking", async () => {
+  vi.mocked(startSearch).mockResolvedValue({
+    ...searching,
+    source: "search",
+    simulations: 3,
+    nodes: 9,
+    elapsed: 1,
+    horizon: 2,
+  });
+  vi.mocked(getSearch).mockResolvedValue({ ...searching, running: true });
+
+  await enableCoach();
+  expect(await screen.findAllByText(/3 simulations/)).not.toHaveLength(0);
+
+  fireEvent.click(screen.getAllByRole("button", { name: "Stop" })[0]);
+
+  expect(stopSearch).toHaveBeenCalledWith("game-123", "job-1");
+  expect(screen.getAllByText(/3 simulations/).length).toBeGreaterThan(0);
+  expect(screen.getAllByText("ROLL 51.0%").length).toBeGreaterThan(0);
+  expect(screen.getByRole("button", { name: "ROLL" })).toBeEnabled();
+});
+
+test("a human Action cancels the search for the previous Position", async () => {
+  vi.mocked(startSearch).mockResolvedValue(searching);
+  vi.mocked(getSearch).mockResolvedValue({ ...searching, running: false });
+  vi.mocked(postAction).mockResolvedValue(makeGameState({ state_index: 13 }));
+
+  await enableCoach();
+  await waitFor(() => {
+    expect(startSearch).toHaveBeenCalledWith(
+      "game-123",
+      expect.objectContaining({ mode: "continuous", state_index: 12 }),
+    );
+  });
+
+  fireEvent.click(screen.getByRole("button", { name: "ROLL" }));
+
+  await waitFor(() => {
+    expect(stopSearch).toHaveBeenCalledWith("game-123", "job-1");
+    expect(startSearch).toHaveBeenCalledWith(
+      "game-123",
+      expect.objectContaining({ mode: "continuous", state_index: 13 }),
+    );
+  });
+  expect(screen.getByTestId("board")).toBeInTheDocument();
+});
+
+test("leaving Coach Mode cancels an active search", async () => {
+  vi.mocked(startSearch).mockResolvedValue(searching);
+  vi.mocked(getSearch).mockResolvedValue({ ...searching, running: false });
+
+  await enableCoach();
+  await waitFor(() => expect(startSearch).toHaveBeenCalled());
+
+  fireEvent.click(coachModeSwitch());
+
+  await waitFor(() =>
+    expect(stopSearch).toHaveBeenCalledWith("game-123", "job-1"),
+  );
+  expect(screen.queryByText("ROLL 51.0%")).not.toBeInTheDocument();
+  expect(coachModeSwitch()).not.toBeChecked();
+  expect(screen.getByTestId("board")).toBeInTheDocument();
+});
+
+test("Presentation Delay stays a visual pause while search keeps digging", async () => {
+  await enableCoach();
+  const delay = screen.getAllByLabelText("Presentation Delay")[0];
+  fireEvent.change(delay, { target: { value: "800" } });
+  expect(window.localStorage.getItem("catan-coach.presentationDelayMs")).toBe(
+    "800",
+  );
+
+  expect(
+    screen.queryByRole("radio", { name: "5 seconds" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Start this budget" }),
+  ).not.toBeInTheDocument();
+  await waitFor(() =>
+    expect(startSearch).toHaveBeenCalledWith(
+      "game-123",
+      expect.objectContaining({ mode: "continuous" }),
+    ),
+  );
 });

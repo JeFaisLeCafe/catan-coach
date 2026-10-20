@@ -8,6 +8,7 @@ import type {
   GameState,
   LiveAnalysis,
   PositionLines,
+  SearchSnapshot,
 } from "./api.types";
 
 /** A registry key, e.g. "CATANATRON" or "AB". The server decides what exists. */
@@ -114,6 +115,39 @@ export async function getPositionLines(
 export async function getAnalysis(gameId: string): Promise<LiveAnalysis> {
   const response = await axios.get<LiveAnalysis>(
     `${API_URL}/api/games/${gameId}/analysis`,
+  );
+  return response.data;
+}
+
+export async function startSearch(
+  gameId: string,
+  budget: {
+    mode: "immediate" | "timed" | "continuous";
+    seconds?: number;
+    state_index: number;
+  },
+): Promise<SearchSnapshot> {
+  const response = await axios.post<SearchSnapshot>(
+    `${API_URL}/api/games/${gameId}/search`,
+    budget,
+  );
+  return response.data;
+}
+
+export async function getSearch(gameId: string): Promise<SearchSnapshot> {
+  const response = await axios.get<SearchSnapshot>(
+    `${API_URL}/api/games/${gameId}/search`,
+  );
+  return response.data;
+}
+
+export async function stopSearch(
+  gameId: string,
+  jobId: string,
+): Promise<SearchSnapshot> {
+  const response = await axios.delete<SearchSnapshot>(
+    `${API_URL}/api/games/${gameId}/search`,
+    { params: { job: jobId } },
   );
   return response.data;
 }

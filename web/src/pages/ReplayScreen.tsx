@@ -18,6 +18,9 @@ import type {
   Color,
   PositionLines as PositionLinesReport,
 } from "../utils/api.types";
+import { applySearch } from "../utils/applySearch";
+import { boardTarget } from "../utils/boardTarget";
+import { useSearchStream } from "../hooks/useSearchStream";
 
 function ReplayScreen() {
   const { gameId } = useParams();
@@ -29,6 +32,13 @@ function ReplayScreen() {
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [lines, setLines] = useState<PositionLinesReport | null>(null);
   const [linesError, setLinesError] = useState<string | null>(null);
+  const [hoverAction, setHoverAction] = useState<string | null>(null);
+  const { snapshot, stop } = useSearchStream({
+    gameId,
+    enabled: Boolean(gameId),
+    stateIndex,
+  });
+  const shownLines = lines && snapshot ? applySearch(lines, snapshot) : lines;
 
   const handlePrevState = () => setStateIndex((prev) => Math.max(prev - 1, 0));
   const handleNextState = () =>
@@ -89,6 +99,10 @@ function ReplayScreen() {
   }, [gameId, stateIndex]);
 
   useEffect(() => {
+    setHoverAction(null);
+  }, [stateIndex]);
+
+  useEffect(() => {
     if (!gameId) return;
 
     (async () => {
@@ -126,10 +140,16 @@ function ReplayScreen() {
           Winner: <strong>{winner}</strong>
         </p>
       )}
-      <ZoomableBoard replayMode={true} />
+      <ZoomableBoard replayMode={true} highlight={boardTarget(hoverAction)} />
       <LeftDrawer />
       <RightDrawer>
-        <PositionLines lines={lines} error={linesError} />
+        <PositionLines
+          lines={shownLines}
+          error={linesError}
+          snapshot={snapshot}
+          onStop={stop}
+          onHoverAction={setHoverAction}
+        />
         <ReviewPanel
           report={report}
           error={reviewError}

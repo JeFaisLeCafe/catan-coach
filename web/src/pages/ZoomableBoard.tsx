@@ -20,6 +20,7 @@ import type {
 } from "../utils/api.types";
 import { robberActionsForTile } from "../utils/robber";
 import RobberChoice from "../components/RobberChoice";
+import type { BoardHighlight } from "../utils/boardTarget";
 
 /**
  * Returns object representing actions to be taken if click on node.
@@ -89,9 +90,13 @@ function buildEdgeActions(state: CatanState) {
 
 type ZoomableBoardProps = {
   replayMode: boolean;
+  highlight?: BoardHighlight;
 };
 
-export default function ZoomableBoard({ replayMode }: ZoomableBoardProps) {
+export default function ZoomableBoard({
+  replayMode,
+  highlight,
+}: ZoomableBoardProps) {
   const { gameId } = useParams();
   const { state, dispatch } = useContext(store);
   const { width, height } = useWindowSize();
@@ -189,6 +194,7 @@ export default function ZoomableBoard({ replayMode }: ZoomableBoardProps) {
             isMobile={isMobile}
             isMovingRobber={state.isMovingRobber}
             robberCoordinates={robberCoordinates}
+            highlight={highlight}
           />
         </TransformComponent>
       </div>

@@ -6,14 +6,18 @@ import {
   getGames,
   getPositionLines,
   getReview,
+  getSearch,
   getState,
   postAction,
+  startSearch,
+  stopSearch,
 } from "./apiClient";
 import { makeGameState } from "../test/fixtures";
 
 const http = vi.hoisted(() => ({
   get: vi.fn(),
   post: vi.fn(),
+  delete: vi.fn(),
 }));
 
 vi.mock("axios", () => ({ default: http }));
@@ -135,5 +139,28 @@ test("translates browser setup options for game creation", async () => {
     vps_to_win: 10,
     discard_limit: 7,
     friendly_robber: false,
+  });
+});
+
+test("starts, reads, and stops a Search Budget", async () => {
+  const snapshot = { job_id: "job-1", running: false, lines: [] };
+  http.post.mockResolvedValueOnce({ data: snapshot });
+  http.get.mockResolvedValueOnce({ data: snapshot });
+  http.delete.mockResolvedValueOnce({ data: snapshot });
+
+  await expect(
+    startSearch("game-123", { mode: "timed", seconds: 5, state_index: 4 }),
+  ).resolves.toEqual(snapshot);
+  await expect(getSearch("game-123")).resolves.toEqual(snapshot);
+  await expect(stopSearch("game-123", "job-1")).resolves.toEqual(snapshot);
+
+  expect(http.post).toHaveBeenCalledWith("/api/games/game-123/search", {
+    mode: "timed",
+    seconds: 5,
+    state_index: 4,
+  });
+  expect(http.get).toHaveBeenCalledWith("/api/games/game-123/search");
+  expect(http.delete).toHaveBeenCalledWith("/api/games/game-123/search", {
+    params: { job: "job-1" },
   });
 });

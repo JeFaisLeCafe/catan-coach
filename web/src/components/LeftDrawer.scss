@@ -32,9 +32,39 @@ $dark-divider: rgb(0 0 0 / 80%);
     color: #bbb;
   }
 
+  .analysis-panel.is-search {
+    box-shadow: inset 3px 0 0 #7dcea0;
+  }
+
+  .analysis-panel.is-immediate {
+    box-shadow: inset 3px 0 0 #666;
+  }
+
+  .search-status {
+    margin: 0 0 variables.$sm-gutter;
+    color: #bbb;
+  }
+
+  .search-status.is-search {
+    color: #7dcea0;
+  }
+
+  .timing-settings,
+  .search-budget {
+    color: inherit;
+  }
+
   .analysis-actions {
     margin: 0;
     padding-left: 1.2rem;
+
+    li {
+      cursor: pointer;
+    }
+
+    li:hover {
+      background: rgba(246, 201, 69, 0.12);
+    }
   }
 
   .analysis-loss,

@@ -20,9 +20,15 @@ import { dispatchSnackbar } from "../components/Snackbar";
 import { getHumanColor } from "../utils/stateUtils";
 import type { LiveAnalysis } from "../utils/api.types";
 import { loadPlayMode, savePlayMode, type PlayMode } from "../utils/playMode";
+import { useSearchStream } from "../hooks/useSearchStream";
+import { boardTarget } from "../utils/boardTarget";
+import {
+  loadPresentationDelay,
+  savePresentationDelay,
+} from "../utils/searchBudget";
 
-// Visual pacing only; postAction already waits for the bot's real computation.
-const BOT_PRESENTATION_DELAY_MS = 300;
+// postAction already waits for the bot's real computation. Presentation Delay
+// only pauses the picture of that Action.
 
 function GameScreen({ replayMode }: { replayMode: boolean }) {
   const { gameId, stateIndex } = useParams();
@@ -32,6 +38,10 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
   const [isBotThinking, setIsBotThinking] = useState(false);
   const [playMode, setPlayMode] = useState<PlayMode>("challenge");
   const [analysis, setAnalysis] = useState<LiveAnalysis | null>(null);
+  const [hoverAction, setHoverAction] = useState<string | null>(null);
+  const [presentationDelay, setPresentationDelay] = useState(
+    loadPresentationDelay,
+  );
   const botRequest = useRef<{ gameId: string } | null>(null);
   const activeGameId = useRef(gameId);
 
@@ -70,6 +80,28 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
     },
     [gameId],
   );
+
+  const changePresentationDelay = useCallback((milliseconds: number) => {
+    const next = Number.isFinite(milliseconds)
+      ? Math.min(5000, Math.max(0, milliseconds))
+      : 300;
+    setPresentationDelay(next);
+    savePresentationDelay(next);
+  }, []);
+
+  const coach = !replayMode && playMode === "coach";
+  const { snapshot, stop } = useSearchStream({
+    gameId,
+    enabled:
+      coach &&
+      state.gameState?.game.id === gameId &&
+      !state.gameState?.winning_color,
+    stateIndex: state.gameState?.state_index,
+  });
+
+  useEffect(() => {
+    setHoverAction(null);
+  }, [state.gameState?.state_index]);
 
   useEffect(() => {
     if (
@@ -178,7 +210,7 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
             if (getHumanColor(gameState)) {
               dispatchSnackbar(enqueueSnackbar, closeSnackbar, gameState);
             }
-          }, BOT_PRESENTATION_DELAY_MS);
+          }, presentationDelay);
         } catch {
           finishRequest();
         }
@@ -191,6 +223,7 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
     dispatch,
     enqueueSnackbar,
     closeSnackbar,
+    presentationDelay,
   ]);
 
   if (!state.gameState) {
@@ -204,12 +237,20 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
   return (
     <main>
       <h1 className="logo">Catan Coach</h1>
-      <ZoomableBoard replayMode={replayMode} />
+      <ZoomableBoard
+        replayMode={replayMode}
+        highlight={boardTarget(hoverAction)}
+      />
       <ActionsToolbar isBotThinking={isBotThinking} replayMode={replayMode} />
       <LeftDrawer
         playMode={replayMode ? undefined : playMode}
         onPlayModeChange={replayMode ? undefined : changePlayMode}
         analysis={replayMode || playMode !== "coach" ? null : analysis}
+        snapshot={replayMode || playMode !== "coach" ? null : snapshot}
+        onStopSearch={stop}
+        onHoverAction={setHoverAction}
+        presentationDelay={replayMode ? undefined : presentationDelay}
+        onPresentationDelay={replayMode ? undefined : changePresentationDelay}
       />
     </main>
   );

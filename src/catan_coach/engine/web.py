@@ -19,10 +19,12 @@ from sqlalchemy import select
 
 from catan_coach.domain.analysis import analyze
 from catan_coach.domain.prediction import WinProbabilityModel
+from catan_coach.domain.search import Budget
 from catan_coach.engine.features import feature_names, public_vp_indices
 from catan_coach.engine.lines import position_lines
 from catan_coach.engine.position import EnginePosition, action_label
 from catan_coach.engine.review import advance_blunder_report
+from catan_coach.engine.search_session import SearchHub
 from catan_coach.models.baselines import VictoryPointShareModel
 
 _PROJECT_ROOT = Path(__file__).parents[3]
@@ -53,6 +55,8 @@ def create_local_app(
         ),
     )
     app.before_request(_validate_local_game_setup)
+    search_hub = SearchHub()
+    app.extensions["search_hub"] = search_hub
 
     @app.get("/api/games")
     def list_games() -> ResponseReturnValue:
@@ -161,6 +165,42 @@ def create_local_app(
             )
         )
 
+    @app.post("/api/games/<string:game_id>/search")
+    def start_position_search(game_id: str) -> ResponseReturnValue:
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            body = {}
+        budget = _search_budget(body)
+        state_index = _search_state_index(game_id, body.get("state_index"))
+        game = get_game_state(game_id, state_index)
+        if game is None:
+            abort(404, description="Resource not found")
+        model, fallback = _load_analysis_model(len(game.state.colors), model_path)
+        return jsonify(
+            search_hub.start(
+                game,
+                model,
+                game_id=game_id,
+                state_index=state_index,
+                budget=budget,
+                fallback=fallback,
+            )
+        )
+
+    @app.get("/api/games/<string:game_id>/search")
+    def read_position_search(game_id: str) -> ResponseReturnValue:
+        payload = search_hub.read(game_id)
+        if payload is None:
+            abort(404, description="Resource not found")
+        return jsonify(payload)
+
+    @app.delete("/api/games/<string:game_id>/search")
+    def stop_position_search(game_id: str) -> ResponseReturnValue:
+        payload = search_hub.stop(game_id, request.args.get("job"))
+        if payload is None:
+            abort(404, description="Resource not found")
+        return jsonify(payload)
+
     @app.get("/")
     @app.get("/<path:requested_path>")
     def serve_browser(requested_path: str = "") -> ResponseReturnValue:
@@ -173,6 +213,40 @@ def create_local_app(
         abort(503, description="Browser assets are not built")
 
     return app
+
+
+def _search_budget(body: dict[str, object]) -> Budget:
+    mode = body.get("mode", "immediate")
+    if mode == "timed":
+        seconds = body.get("seconds")
+        if (
+            isinstance(seconds, bool)
+            or not isinstance(seconds, int | float)
+            or seconds <= 0
+            or seconds > 600
+        ):
+            abort(400, description="seconds must be a positive duration up to 600")
+        return Budget("timed", float(seconds))
+    if mode == "continuous":
+        if body.get("seconds") is not None:
+            abort(400, description="only a timed Search Budget has a duration")
+        return Budget("continuous")
+    if mode != "immediate":
+        abort(400, description="mode must be immediate, timed, or continuous")
+    if body.get("seconds") is not None:
+        abort(400, description="only a timed Search Budget has a duration")
+    return Budget("immediate")
+
+
+def _search_state_index(game_id: str, raw: object) -> int:
+    if raw is None:
+        stored = db.session.scalar(select(StoredGame).where(StoredGame.uuid == game_id))
+        if stored is None:
+            abort(404, description="Resource not found")
+        return int(stored.head_index)
+    if isinstance(raw, bool) or not isinstance(raw, int) or raw < 0:
+        abort(400, description="state_index must be a whole number")
+    return raw
 
 
 def _recorded_action_label(game_id: str, state_index: int) -> str | None:
