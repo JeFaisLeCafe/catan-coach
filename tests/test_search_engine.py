@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import random
-import time
 
 import pytest
 
@@ -13,18 +12,26 @@ pytestmark = pytest.mark.engine
 catanatron = pytest.importorskip("catanatron")
 
 from catanatron.game import Game  # noqa: E402
+from catanatron.models.enums import ActionType  # noqa: E402
 from catanatron.models.player import Color, SimplePlayer  # noqa: E402
 from catanatron.serialization import state_to_json  # noqa: E402
 
 from catan_coach.domain.search import Budget, SearchCache  # noqa: E402
 from catan_coach.engine.features import public_vp_indices  # noqa: E402
 from catan_coach.engine.search import refine_position  # noqa: E402
+from catan_coach.engine.search_session import _SEARCH_SECONDS, _running_budget  # noqa: E402
 from catan_coach.models.baselines import VictoryPointShareModel  # noqa: E402
 
 
 def _game() -> Game:
     colors = [Color.RED, Color.BLUE, Color.WHITE, Color.ORANGE]
     return Game([SimplePlayer(color) for color in colors], seed=3)
+
+
+def test_a_page_search_is_cut_off_at_ten_minutes() -> None:
+    assert _SEARCH_SECONDS == 10 * 60
+    assert _running_budget(Budget("continuous")) == Budget("timed", 600)
+    assert _running_budget(Budget("timed", 30)) == Budget("timed", 30)
 
 
 def test_search_does_not_change_the_game_or_its_random_stream() -> None:
@@ -116,22 +123,49 @@ def test_the_same_position_reuses_a_finished_search() -> None:
     assert second == [first[-1]]
 
 
-def test_extra_time_looks_further_than_four_plies() -> None:
-    snapshots = list(
-        refine_position(
-            _game(),
-            VictoryPointShareModel(public_vp_indices(4)),
-            budget=Budget("timed", 2.0),
-            clock=time.perf_counter,
-            rng=random.Random(1),
-            stop=lambda: False,
-            batch_size=4,
-            max_depth=24,
-            policy_width=3,
-        )
-    )
+def _until_roll() -> Game:
+    game = _game()
+    seats = {color: SimplePlayer(color) for color in game.state.colors}
+    for _ in range(80):
+        if any(action.action_type == ActionType.ROLL for action in game.playable_actions):
+            return game
+        color = game.state.current_color()
+        game.execute(seats[color].decide(game, game.playable_actions))
+    raise AssertionError("never rolled")
 
-    last = snapshots[-1]
-    assert last.horizon >= 10
-    assert last.horizon > snapshots[0].horizon
-    assert last.simulations > 1
+
+def test_repeated_rolls_cover_each_dice_total_before_repeating_one() -> None:
+    game = _until_roll()
+    assert [action.action_type for action in game.playable_actions] == [ActionType.ROLL]
+    model = VictoryPointShareModel(public_vp_indices(4))
+
+    def search(seed: int, snapshots: int) -> tuple[float, int, int]:
+        seen = {"n": 0}
+        last = None
+        for snapshot in refine_position(
+            game,
+            model,
+            budget=Budget("continuous"),
+            clock=lambda: 0.0,
+            rng=random.Random(seed),
+            stop=lambda: seen["n"] >= snapshots,
+            batch_size=1,
+            max_depth=1,
+            policy_width=1,
+        ):
+            seen["n"] += 1
+            last = snapshot
+        assert last is not None
+        return last.lines[0].win_probability, last.nodes, last.simulations
+
+    first_probability, first_nodes, _first_sims = search(1, 2)
+    second_probability, _second_nodes, _second_sims = search(2, 2)
+    _covered_probability, covered_nodes, covered_sims = search(1, 12)
+    _later_probability, later_nodes, later_sims = search(1, 40)
+
+    assert first_nodes == 1
+    assert first_probability == pytest.approx(second_probability)
+    assert covered_nodes == 11
+    assert covered_sims == 11
+    assert later_nodes == 11
+    assert later_sims == 11

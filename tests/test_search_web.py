@@ -80,6 +80,48 @@ def test_stopping_keeps_the_latest_snapshot(tmp_path: Path) -> None:
     assert later["job_id"] == frozen["job_id"]
 
 
+def test_resume_continues_the_paused_search(tmp_path: Path) -> None:
+    client, game_id = _client(tmp_path)
+    started = client.post(f"/api/games/{game_id}/search", json={"mode": "continuous"}).get_json()
+    stopped = client.delete(
+        f"/api/games/{game_id}/search",
+        query_string={"job": started["job_id"]},
+    ).get_json()
+    assert stopped["running"] is False
+    frozen = stopped["simulations"]
+
+    resumed = client.post(
+        f"/api/games/{game_id}/search/resume",
+        query_string={"job": started["job_id"]},
+    )
+    assert resumed.status_code == 200
+    assert resumed.get_json()["running"] is True
+    assert resumed.get_json()["job_id"] == started["job_id"]
+
+    deadline = time.time() + 8
+    body = resumed.get_json()
+    while body["simulations"] <= frozen and time.time() < deadline:
+        time.sleep(0.05)
+        body = client.get(f"/api/games/{game_id}/search").get_json()
+
+    assert body["simulations"] > frozen
+    assert body["job_id"] == started["job_id"]
+
+
+def test_cancelling_a_search_cannot_be_resumed(tmp_path: Path) -> None:
+    client, game_id = _client(tmp_path)
+    started = client.post(f"/api/games/{game_id}/search", json={"mode": "continuous"}).get_json()
+    client.delete(
+        f"/api/games/{game_id}/search",
+        query_string={"job": started["job_id"], "cancel": "1"},
+    )
+    resumed = client.post(
+        f"/api/games/{game_id}/search/resume",
+        query_string={"job": started["job_id"]},
+    )
+    assert resumed.status_code == 404
+
+
 def test_replacing_a_search_drops_the_old_result(tmp_path: Path) -> None:
     client, game_id = _client(tmp_path)
     first = client.post(f"/api/games/{game_id}/search", json={"mode": "continuous"}).get_json()

@@ -6,6 +6,7 @@ import random
 from collections.abc import Callable, Iterator
 
 from catanatron.game import Game
+from catanatron.models.enums import ActionRecord, ActionType
 from catanatron.models.player import Color
 
 from catan_coach.domain.analysis import analyze
@@ -18,6 +19,8 @@ from catan_coach.domain.search import (
 )
 from catan_coach.engine.features import feature_vector
 from catan_coach.engine.position import EnginePosition, _copy_without_sharing_rng, action_label
+
+_DICE_WAYS = {2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 7: 6, 8: 5, 9: 4, 10: 3, 11: 2, 12: 1}
 
 
 class _EngineState:
@@ -32,12 +35,24 @@ class _EngineState:
     def actions(self) -> tuple[str, ...]:
         return tuple(self._actions)
 
-    def step(self, action: str, rng: random.Random) -> _EngineState:
+    def outcomes(self, action: str) -> tuple[tuple[str, float], ...] | None:
+        engine_action = self._actions.get(action)
+        if engine_action is None or engine_action.action_type != ActionType.ROLL:
+            return None
+        return tuple((str(total), ways / 36) for total, ways in _DICE_WAYS.items())
+
+    def step(self, action: str, rng: random.Random, outcome: str | None = None) -> _EngineState:
         clone = _copy_without_sharing_rng(self._game)
         rolled = random.Random(rng.randrange(1 << 30))
         clone.random = rolled
         clone.state.random = rolled
-        clone.execute(self._actions[action])
+        engine_action = self._actions[action]
+        record = None
+        if outcome is not None:
+            total = int(outcome)
+            low = min(6, max(1, total - 6))
+            record = ActionRecord(engine_action, (low, total - low))
+        clone.execute(engine_action, action_record=record)
         return _EngineState(clone, self._model)
 
     def winner(self) -> str | None:
@@ -60,10 +75,11 @@ def refine_position(
     cache: SearchCache | None = None,
     position_id: str = "",
     batch_size: int = 4,
-    max_depth: int = 24,
+    max_depth: int = 200,
+    max_nodes: int = 800_000,
     policy_width: int = 3,
 ) -> Iterator[Snapshot]:
-    """Copy `game`, rank it with the model, then sample forward.
+    """Copy `game`, rank it with the model, then play forward.
 
     The caller's game and its random stream are not used again after the copy.
     A timed or immediate run stores its last snapshot. A stopped run does not,
@@ -90,6 +106,7 @@ def refine_position(
         stop=stop,
         batch_size=batch_size,
         max_depth=max_depth,
+        max_nodes=max_nodes,
         policy_width=policy_width,
     ):
         last = snapshot

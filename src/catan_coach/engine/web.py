@@ -194,9 +194,20 @@ def create_local_app(
             abort(404, description="Resource not found")
         return jsonify(payload)
 
+    @app.post("/api/games/<string:game_id>/search/resume")
+    def resume_position_search(game_id: str) -> ResponseReturnValue:
+        payload = search_hub.resume(game_id, request.args.get("job"))
+        if payload is None:
+            abort(404, description="Resource not found")
+        return jsonify(payload)
+
     @app.delete("/api/games/<string:game_id>/search")
     def stop_position_search(game_id: str) -> ResponseReturnValue:
-        payload = search_hub.stop(game_id, request.args.get("job"))
+        payload = search_hub.stop(
+            game_id,
+            request.args.get("job"),
+            cancel=request.args.get("cancel") == "1",
+        )
         if payload is None:
             abort(404, description="Resource not found")
         return jsonify(payload)

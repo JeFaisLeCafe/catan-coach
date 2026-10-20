@@ -17,12 +17,17 @@ class Tiny:
         actions: dict[str, Tiny] | None = None,
         values: dict[str, float] | None = None,
         winner: str | None = None,
+        outcomes: dict[str, tuple[tuple[str, float], ...]] | None = None,
+        worlds: dict[str, dict[str, Tiny]] | None = None,
     ) -> None:
         self._seat = seat
         self._actions = actions or {}
         self._values = values or {}
         self._winner = winner
+        self._outcomes = outcomes or {}
+        self._worlds = worlds or {}
         self.steps = 0
+        self.seen: list[str | None] = []
 
     def seat(self) -> str:
         return self._seat
@@ -30,10 +35,16 @@ class Tiny:
     def actions(self) -> tuple[str, ...]:
         return tuple(self._actions)
 
-    def step(self, action: str, rng: random.Random) -> SearchState:
+    def outcomes(self, action: str) -> tuple[tuple[str, float], ...] | None:
+        return self._outcomes.get(action)
+
+    def step(self, action: str, rng: random.Random, outcome: str | None = None) -> SearchState:
         del rng
         self.steps += 1
-        return self._actions[action]
+        self.seen.append(outcome)
+        if outcome is None:
+            return self._actions[action]
+        return self._worlds[action][outcome]
 
     def winner(self) -> str | None:
         return self._winner
@@ -163,6 +174,88 @@ def test_the_horizon_grows_as_lines_reach_the_frontier() -> None:
     assert horizons[0] == 1
     assert horizons == sorted(horizons)
     assert horizons[-1] > 4
+
+
+def test_a_spent_node_budget_ends_the_search() -> None:
+    snapshots = []
+    generator = progressive_search(
+        _tree(),
+        root_seat="RED",
+        prior=(("good", 0.2), ("bad", 0.7)),
+        budget=Budget("continuous"),
+        clock=lambda: 0.0,
+        rng=random.Random(0),
+        stop=lambda: False,
+        batch_size=1,
+        max_depth=4,
+        max_nodes=1,
+    )
+    for snapshot in generator:
+        snapshots.append(snapshot)
+        if len(snapshots) > 20:
+            break
+
+    assert len(snapshots) < 20
+    assert snapshots[-1].source == "search"
+    assert snapshots[-1].nodes == 1
+
+
+def test_a_finished_depth_ends_the_search() -> None:
+    node = Tiny("RED", winner="RED", values={"RED": 1.0})
+    for ply in range(6):
+        node = Tiny("RED", actions={f"ply-{ply}": node}, values={"RED": 0.2})
+    snapshots = []
+    generator = progressive_search(
+        node,
+        root_seat="RED",
+        prior=((node.actions()[0], 0.5),),
+        budget=Budget("continuous"),
+        clock=lambda: 0.0,
+        rng=random.Random(0),
+        stop=lambda: False,
+        batch_size=1,
+        max_depth=2,
+        policy_width=1,
+    )
+    for snapshot in generator:
+        snapshots.append(snapshot)
+        if len(snapshots) > 20:
+            break
+
+    assert len(snapshots) < 20
+    assert snapshots[-1].horizon <= 2
+
+
+def test_another_simulation_tries_a_new_dice_total() -> None:
+    high = Tiny("BLUE", winner="RED", values={"RED": 1.0})
+    low = Tiny("BLUE", winner="BLUE", values={"RED": 0.0})
+    root = Tiny(
+        "RED",
+        actions={"roll": low},
+        values={"RED": 0.5},
+        outcomes={"roll": (("low", 0.25), ("high", 0.75))},
+        worlds={"roll": {"low": low, "high": high}},
+    )
+    generator = progressive_search(
+        root,
+        root_seat="RED",
+        prior=(("roll", 0.5),),
+        budget=Budget("continuous"),
+        clock=lambda: 0.0,
+        rng=random.Random(0),
+        stop=lambda: False,
+        batch_size=1,
+        max_depth=2,
+    )
+    next(generator)
+    first = next(generator)
+    second = next(generator)
+
+    assert root.seen == ["high", "low"]
+    assert first.nodes == 1
+    assert second.nodes == 2
+    assert first.lines[0].visits == 1
+    assert second.lines[0].visits == 2
 
 
 def test_a_completed_snapshot_is_reused_without_stepping() -> None:
