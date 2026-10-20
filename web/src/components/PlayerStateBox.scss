@@ -62,7 +62,14 @@
 }
 
 .player-state-box {
-  padding: variables.$sm-gutter;
+  padding: 8px variables.$sm-gutter 4px;
+
+  .seat-name {
+    margin-bottom: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
 
   max-width: variables.$sm-breakpoint;
   margin: 0 auto;

@@ -144,9 +144,27 @@ export async function getSearch(gameId: string): Promise<SearchSnapshot> {
 export async function stopSearch(
   gameId: string,
   jobId: string,
+  options?: { cancel?: boolean },
 ): Promise<SearchSnapshot> {
   const response = await axios.delete<SearchSnapshot>(
     `${API_URL}/api/games/${gameId}/search`,
+    {
+      params: {
+        job: jobId,
+        ...(options?.cancel ? { cancel: "1" } : {}),
+      },
+    },
+  );
+  return response.data;
+}
+
+export async function resumeSearch(
+  gameId: string,
+  jobId: string,
+): Promise<SearchSnapshot> {
+  const response = await axios.post<SearchSnapshot>(
+    `${API_URL}/api/games/${gameId}/search/resume`,
+    null,
     { params: { job: jobId } },
   );
   return response.data;

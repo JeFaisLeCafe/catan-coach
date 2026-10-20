@@ -1,0 +1,85 @@
+.panel-heading {
+  h3 {
+    margin: 0;
+    color: #f3f0e8;
+    font-size: 1rem;
+    font-weight: 650;
+    letter-spacing: 0.01em;
+  }
+
+  p {
+    margin: 2px 0 0;
+    color: #b7b1a4;
+    font-size: 0.75rem;
+  }
+}
+
+.panel-error {
+  margin: 0;
+  color: #f3c7b8;
+}
+
+.move-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 14px;
+  background: rgb(255 255 255 / 3%);
+  color: #f3f0e8;
+  cursor: pointer;
+
+  &:hover {
+    border-color: rgb(230 195 106 / 70%);
+    background: rgb(230 195 106 / 10%);
+  }
+}
+
+.move-card.is-played {
+  box-shadow: inset 3px 0 0 #e6c36a;
+}
+
+.move-card-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.position-rank,
+.move-loss,
+.analysis-loss {
+  color: #b7b1a4;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.move-loss,
+.analysis-loss {
+  color: #e6b15a;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.position-probability,
+.move-action {
+  color: #f3f0e8;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.move-summary {
+  line-height: 1.35;
+}
+
+.chance {
+  display: block;
+  height: 4px;
+  border-radius: 99px;
+  background:
+    linear-gradient(#e6c36a, #e6c36a) 0 0 / var(--chance) 100% no-repeat,
+    rgb(255 255 255 / 8%);
+}

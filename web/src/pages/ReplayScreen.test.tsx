@@ -24,6 +24,7 @@ vi.mock("../utils/apiClient", () => ({
   startSearch: vi.fn(),
   getSearch: vi.fn(),
   stopSearch: vi.fn(),
+  resumeSearch: vi.fn(),
 }));
 vi.mock("./ZoomableBoard", () => ({
   default: ({ highlight }: { highlight?: { nodeId: number | null } }) => (
@@ -202,13 +203,15 @@ test("opens a reviewed ply and sorts decisions by loss", async () => {
     name: /Ply 16/,
   });
   expect(blunder).toHaveClass("grade-blunder");
-  expect(screen.getByText("Best BUILD_SETTLEMENT 8")).toBeInTheDocument();
+  expect(screen.getByText("Preferred Settlement 8")).toBeInTheDocument();
+  expect(screen.getByText("Production")).toBeInTheDocument();
   expect(
     screen.getByText(
       "No trained model is available; using the vp-share Baseline.",
     ),
   ).toBeInTheDocument();
-  expect(screen.getByText(/search budget immediate/)).toBeInTheDocument();
+  expect(screen.getByText(/saved first look/)).toBeInTheDocument();
+  expect(screen.queryByText(/search budget/i)).not.toBeInTheDocument();
 
   await user.click(blunder);
   await waitFor(() => {
@@ -216,7 +219,7 @@ test("opens a reviewed ply and sorts decisions by loss", async () => {
     expect(screen.getByTestId("state-index")).toHaveTextContent("16");
   });
 
-  await user.click(screen.getByRole("button", { name: "Loss" }));
+  await user.click(screen.getByRole("button", { name: "Costliest" }));
   const rows = screen.getAllByRole("button", { name: /Ply / });
   expect(rows[0]).toHaveTextContent("Ply 16");
   expect(rows[1]).toHaveTextContent("Ply 4");
@@ -279,7 +282,9 @@ test("search keeps digging on every position until the position changes", async 
   await user.click(screen.getByRole("button", { name: "Next Move" }));
 
   await waitFor(() => {
-    expect(stopSearch).toHaveBeenCalledWith("game-123", "job-1");
+    expect(stopSearch).toHaveBeenCalledWith("game-123", "job-1", {
+      cancel: true,
+    });
     expect(startSearch).toHaveBeenCalledWith(
       "game-123",
       expect.objectContaining({ mode: "continuous", state_index: 1 }),

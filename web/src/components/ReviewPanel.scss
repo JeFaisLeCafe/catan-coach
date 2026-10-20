@@ -3,74 +3,108 @@
   flex-direction: column;
   gap: 8px;
   min-height: 0;
-  font-size: 0.8rem;
+  color: #f3f0e8;
+  font-size: 0.84rem;
 
   h3,
   p {
     margin: 0;
   }
+}
 
-  .review-notice,
-  .review-meta,
-  .review-reason,
-  .review-best {
-    color: #bbb;
-  }
+.review-notice,
+.review-meta,
+.review-score,
+.review-best {
+  color: #b7b1a4;
+}
 
-  .review-sort {
-    display: flex;
-    gap: 8px;
+.review-sort {
+  display: flex;
+  gap: 6px;
 
-    button {
-      color: white;
-      background: transparent;
-      border: 1px solid #555;
-      border-radius: 4px;
-      padding: 2px 8px;
-    }
-
-    button[aria-pressed="true"] {
-      border-color: white;
-    }
-  }
-
-  .review-decisions {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    overflow-y: auto;
-    max-height: 40vh;
-  }
-
-  .review-decision {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
-    margin-bottom: 8px;
-    padding: 6px;
-    color: white;
-    text-align: left;
+  button {
+    border: 1px solid rgb(255 255 255 / 12%);
     background: transparent;
-    border: 1px solid #333;
-    border-left-width: 4px;
-    border-radius: 4px;
+    color: #f3f0e8;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font: inherit;
+    font-size: 0.75rem;
+    cursor: pointer;
   }
 
-  .grade-best {
-    border-left-color: #7dcea0;
+  button[aria-pressed="true"] {
+    border-color: transparent;
+    background: #e6c36a;
+    color: #1c1406;
+    font-weight: 700;
   }
+}
 
-  .grade-near-tie {
-    border-left-color: #bbbbbb;
-  }
+.review-decisions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: auto;
+  min-height: 0;
+}
 
-  .grade-mistake {
-    border-left-color: #e6b15a;
-  }
+.review-decision {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  color: inherit;
+  text-align: left;
+  background: rgb(255 255 255 / 3%);
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 14px;
+  box-shadow: inset 3px 0 0 #7dcea0;
+  cursor: pointer;
+  font: inherit;
 
-  .grade-blunder {
-    border-left-color: #ff6b6b;
+  &:hover {
+    border-color: rgb(230 195 106 / 70%);
+    background: rgb(230 195 106 / 10%);
   }
+}
+
+.review-kicker {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  gap: 8px;
+  color: #b7b1a4;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.review-played {
+  font-weight: 650;
+}
+
+.review-score,
+.review-best {
+  font-size: 0.78rem;
+}
+
+.grade-best {
+  box-shadow: inset 3px 0 0 #7dcea0;
+}
+
+.grade-near-tie {
+  box-shadow: inset 3px 0 0 #b7b1a4;
+}
+
+.grade-mistake {
+  box-shadow: inset 3px 0 0 #e6b15a;
+}
+
+.grade-blunder {
+  box-shadow: inset 3px 0 0 #ff7a7a;
 }

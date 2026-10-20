@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { SnackbarProvider } from "notistack";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
-import { blue, green } from "@mui/material/colors";
+import { green } from "@mui/material/colors";
 import Fade from "@mui/material/Fade";
 
 import GameScreen from "./pages/GameScreen";
@@ -12,12 +12,22 @@ import "./App.scss";
 import ReplayScreen from "./pages/ReplayScreen";
 
 const theme = createTheme({
+  breakpoints: {
+    values: { xs: 0, sm: 600, md: 960, lg: 1280, xl: 1920 },
+  },
   palette: {
     primary: {
-      main: blue[900],
+      main: "#c4922a",
+      contrastText: "#1c1406",
     },
     secondary: {
-      main: green[900],
+      main: green[800],
+    },
+  },
+  typography: {
+    button: {
+      textTransform: "none",
+      fontWeight: 600,
     },
   },
 });

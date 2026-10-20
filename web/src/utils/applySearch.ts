@@ -39,15 +39,10 @@ export function applySearch(
 }
 
 export function formatSearchStatus(snapshot: SearchSnapshot): string {
-  const uncertainty =
-    snapshot.uncertainty > 0
-      ? `±${(snapshot.uncertainty * 100).toFixed(1)}%`
-      : "± —";
   return [
     `${snapshot.simulations} simulations`,
     `${snapshot.nodes} nodes`,
     `${snapshot.elapsed.toFixed(1)}s`,
     `${snapshot.horizon.toFixed(0)} plies ahead`,
-    uncertainty,
   ].join(" · ");
 }

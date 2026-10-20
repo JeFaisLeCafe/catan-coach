@@ -101,7 +101,10 @@ export default function ZoomableBoard({
   const { state, dispatch } = useContext(store);
   const { width, height } = useWindowSize();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.up("md"));
+  const desktop = useMediaQuery(theme.breakpoints.up("md"));
+  const wide = useMediaQuery(theme.breakpoints.up("lg"));
+  const leftInset = desktop ? 260 : 0;
+  const rightInset = wide && replayMode ? 340 : 0;
   const [show, setShow] = useState(false);
   const [robberChoices, setRobberChoices] = useState<MoveRobberAction[] | null>(
     null,
@@ -191,7 +194,8 @@ export default function ZoomableBoard({
             replayMode={replayMode}
             show={show}
             gameState={gameState}
-            isMobile={isMobile}
+            leftInset={leftInset}
+            rightInset={rightInset}
             isMovingRobber={state.isMovingRobber}
             robberCoordinates={robberCoordinates}
             highlight={highlight}

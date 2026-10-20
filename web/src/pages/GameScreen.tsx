@@ -90,7 +90,7 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
   }, []);
 
   const coach = !replayMode && playMode === "coach";
-  const { snapshot, stop } = useSearchStream({
+  const { snapshot, stop, resume } = useSearchStream({
     gameId,
     enabled:
       coach &&
@@ -248,6 +248,7 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
         analysis={replayMode || playMode !== "coach" ? null : analysis}
         snapshot={replayMode || playMode !== "coach" ? null : snapshot}
         onStopSearch={stop}
+        onResumeSearch={resume}
         onHoverAction={setHoverAction}
         presentationDelay={replayMode ? undefined : presentationDelay}
         onPresentationDelay={replayMode ? undefined : changePresentationDelay}

@@ -4,17 +4,34 @@ $dark-divider: rgb(0 0 0 / 80%);
 
 .right-drawer {
   .drawer-content {
-    padding: variables.$sm-gutter;
-
     display: flex;
+    flex: 1;
     flex-direction: column;
-    gap: variables.$sm-gutter;
+    gap: 16px;
+    min-height: 0;
+    padding: 16px 14px 18px;
+    overflow: hidden;
   }
 
   .MuiDrawer-paper {
-    width: 280px;
-    background: variables.$dark-gray;
-    color: white;
+    display: flex;
+    flex-direction: column;
+    width: variables.$right-drawer;
+    background: #101412;
+    color: #f3f0e8;
+  }
+
+  .position-lines,
+  .review-panel {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .replay-box {
+    flex: none;
+    padding-top: 8px;
+    border-top: 1px solid rgb(255 255 255 / 8%);
   }
 
   .MuiDivider-root {

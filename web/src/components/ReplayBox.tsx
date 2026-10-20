@@ -40,7 +40,9 @@ export default function ReplayBox({
   return (
     <div className="replay-box">
       <h3>Replay</h3>
-      Move: {stateIndex} / {latestStateIndex}
+      <p className="replay-progress">
+        Move: {stateIndex} / {latestStateIndex}
+      </p>
       <Slider
         className="move-slider"
         min={0}

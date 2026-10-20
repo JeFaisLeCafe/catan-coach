@@ -1,0 +1,27 @@
+.reason-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 6%);
+    color: #c9c2b4;
+    font-size: 0.72rem;
+    line-height: 1.4;
+  }
+
+  .is-up {
+    color: #c6ead4;
+    background: rgb(125 206 160 / 14%);
+  }
+
+  .is-down {
+    color: #f3c7b8;
+    background: rgb(255 122 122 / 12%);
+  }
+}

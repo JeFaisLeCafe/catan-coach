@@ -8,7 +8,8 @@ main {
   flex-direction: column;
 
   .logo {
-    margin: 5px 20px 0 20px;
+    margin: 4px 16px 0;
+    font-size: 1.15rem;
     text-align: center;
   }
 
@@ -21,5 +22,17 @@ main {
     display: flex;
     justify-content: center;
     align-items: center;
+  }
+}
+
+@media (min-width: variables.$md-breakpoint) {
+  main {
+    padding-left: variables.$left-drawer;
+  }
+}
+
+@media (min-width: variables.$lg-breakpoint) {
+  main {
+    padding-right: variables.$right-drawer;
   }
 }

@@ -1,12 +1,15 @@
 import { useMemo, useState } from "react";
 
+import { readableAction } from "../utils/actions";
 import type { BlunderReport, DecisionGrade } from "../utils/api.types";
+import ReasonList from "./ReasonList";
 
+import "./coach.scss";
 import "./ReviewPanel.scss";
 
 const GRADE_LABEL: Record<DecisionGrade, string> = {
   best: "Best",
-  "near-tie": "Near-tie",
+  "near-tie": "Close",
   mistake: "Mistake",
   blunder: "Blunder",
 };
@@ -36,31 +39,36 @@ export default function ReviewPanel({
   }, [byLoss, report]);
 
   return (
-    <section className="review-panel" aria-label="Blunder Report">
-      <h3>Review</h3>
-      {error && <p>{error}</p>}
-      {!report && !error && <p>Reviewing decisions…</p>}
+    <section className="review-panel" aria-label="Your choices">
+      <header className="panel-heading">
+        <h3>Your choices</h3>
+        <p>
+          A saved first look at each move you made. Open one to put it on the
+          board.
+        </p>
+      </header>
+      {error && <p className="panel-error">{error}</p>}
+      {!report && !error && <p>Reading your choices…</p>}
       {report && (
         <>
           {report.notice && <p className="review-notice">{report.notice}</p>}
-          <p className="review-meta">
-            {report.model} · search budget {report.search_budget}
-            {!report.complete && " · reviewing…"}
-          </p>
-          <div className="review-sort">
+          {!report.complete && (
+            <p className="review-meta">Still reading the rest of the game.</p>
+          )}
+          <div className="review-sort" role="group" aria-label="Sort choices">
             <button
               type="button"
               aria-pressed={!byLoss}
               onClick={() => setByLoss(false)}
             >
-              Time
+              In order
             </button>
             <button
               type="button"
               aria-pressed={byLoss}
               onClick={() => setByLoss(true)}
             >
-              Loss
+              Costliest
             </button>
           </div>
           {report.complete && decisions.length === 0 && (
@@ -74,22 +82,25 @@ export default function ReviewPanel({
                   className={`review-decision grade-${decision.grade}`}
                   onClick={() => onSelectPly(decision.ply)}
                 >
-                  <span>{`Ply ${decision.ply}`}</span>
-                  <span className="review-grade">
-                    {GRADE_LABEL[decision.grade]}
+                  <span className="review-kicker">
+                    <span>{`Ply ${decision.ply}`}</span>
+                    <span className="review-grade">
+                      {GRADE_LABEL[decision.grade]}
+                    </span>
                   </span>
-                  <span>{decision.played}</span>
-                  <span>
-                    {`${formatPercent(decision.win_probability)} · −${(decision.loss * 100).toFixed(1)}`}
+                  <span className="review-played">
+                    {readableAction(decision.played)}
+                  </span>
+                  <span className="review-score">
+                    {formatPercent(decision.win_probability)}
+                    {decision.loss > 0
+                      ? ` · ${(decision.loss * 100).toFixed(1)} points behind`
+                      : ""}
                   </span>
                   {decision.loss > 0 && (
-                    <span className="review-best">{`Best ${decision.best}`}</span>
+                    <span className="review-best">{`Preferred ${readableAction(decision.best)}`}</span>
                   )}
-                  {decision.reasons.map((reason) => (
-                    <span key={reason.label} className="review-reason">
-                      {reason.label}
-                    </span>
-                  ))}
+                  <ReasonList reasons={decision.reasons} />
                 </button>
               </li>
             ))}

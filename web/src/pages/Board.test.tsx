@@ -16,7 +16,7 @@ test("renders the nested tile, node, and edge shapes emitted by GameEncoder", ()
       handleTileClick={() => undefined}
       replayMode={false}
       gameState={gameState}
-      isMobile={false}
+      leftInset={0}
       show
       isMovingRobber={false}
     />,
@@ -40,7 +40,7 @@ test("a hovered move marks that spot even in a replay", () => {
     handleTileClick: () => undefined,
     replayMode: true,
     gameState,
-    isMobile: false,
+    leftInset: 0,
     show: true,
     isMovingRobber: false,
   };

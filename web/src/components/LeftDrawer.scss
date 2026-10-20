@@ -1,75 +1,58 @@
 @use "../variables.scss";
 
-$dark-divider: rgb(0 0 0 / 80%);
+$dark-divider: rgb(255 255 255 / 8%);
 
 .left-drawer {
   .MuiDrawer-paper {
-    width: 280px;
-    background: variables.$dark-gray;
+    display: flex;
+    flex-direction: column;
+    width: variables.$left-drawer;
+    background: #101412;
+    color: #f3f0e8;
   }
 
   .play-mode-toggle {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 4px;
-    padding: variables.$sm-gutter;
-    font-size: 0.85rem;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 12px 12px 4px;
+    padding: 4px 8px 4px 14px;
+    border: 1px solid rgb(255 255 255 / 8%);
+    border-radius: 999px;
+    background: rgb(255 255 255 / 4%);
+    font-size: 0.82rem;
   }
 
-  .analysis-panel {
-    padding: 0 variables.$sm-gutter variables.$sm-gutter;
-    font-size: 0.8rem;
+  .timing-settings {
+    margin: 8px 12px 0;
+    color: #b7b1a4;
+    font-size: 0.78rem;
   }
 
-  .analysis-notice,
-  .analysis-forced {
-    margin: 0 0 variables.$sm-gutter;
+  .presentation-delay {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
-  .analysis-meta {
-    margin: 0 0 variables.$sm-gutter;
-    color: #bbb;
+  .presentation-delay input {
+    width: 72px;
+    border: 1px solid rgb(255 255 255 / 14%);
+    border-radius: 8px;
+    background: rgb(255 255 255 / 4%);
+    color: #f3f0e8;
+    padding: 4px 8px;
   }
 
-  .analysis-panel.is-search {
-    box-shadow: inset 3px 0 0 #7dcea0;
+  .search-budget-hint {
+    margin: 6px 0 0;
   }
 
-  .analysis-panel.is-immediate {
-    box-shadow: inset 3px 0 0 #666;
-  }
-
-  .search-status {
-    margin: 0 0 variables.$sm-gutter;
-    color: #bbb;
-  }
-
-  .search-status.is-search {
-    color: #7dcea0;
-  }
-
-  .timing-settings,
-  .search-budget {
-    color: inherit;
-  }
-
-  .analysis-actions {
-    margin: 0;
-    padding-left: 1.2rem;
-
-    li {
-      cursor: pointer;
-    }
-
-    li:hover {
-      background: rgba(246, 201, 69, 0.12);
-    }
-  }
-
-  .analysis-loss,
-  .analysis-reason {
-    color: #bbb;
+  .perspective-toggle {
+    margin: 8px 12px;
+    color: #b7b1a4;
+    font-size: 0.78rem;
   }
 
   .MuiDivider-root {
@@ -81,16 +64,17 @@ $dark-divider: rgb(0 0 0 / 80%);
   }
 
   .log {
+    flex: 1;
+    min-height: 120px;
     overflow-y: auto;
     font-size: 0.8rem;
-
-    // To ensure always clipped towards bottom
     display: flex;
     flex-direction: column-reverse;
     scrollbar-width: thin;
-    scrollbar-color: #454545 variables.$dark-gray;
+    scrollbar-color: #454545 #101412;
+
     .action {
-      padding: variables.$sm-gutter;
+      padding: 8px 12px;
     }
   }
 }

@@ -18,6 +18,7 @@ import {
   getSearch,
   getState,
   postAction,
+  resumeSearch,
   startSearch,
   stopSearch,
 } from "../utils/apiClient";
@@ -37,6 +38,7 @@ vi.mock("../utils/apiClient", () => ({
   startSearch: vi.fn(),
   getSearch: vi.fn(),
   stopSearch: vi.fn(),
+  resumeSearch: vi.fn(),
 }));
 vi.mock("../components/Snackbar", () => ({
   dispatchSnackbar: vi.fn(),
@@ -351,7 +353,9 @@ test("presents a forced Action as forced instead of a choice", async () => {
 
   renderGameScreen();
 
-  expect(await screen.findAllByText("This Action is forced")).not.toHaveLength(
+  expect(
+    await screen.findAllByText("This move is the only legal one."),
+  ).not.toHaveLength(
     0,
   );
 });
@@ -475,7 +479,33 @@ test("stopping a continuous search keeps the latest ranking", async () => {
   expect(stopSearch).toHaveBeenCalledWith("game-123", "job-1");
   expect(screen.getAllByText(/3 simulations/).length).toBeGreaterThan(0);
   expect(screen.getAllByText("ROLL 51.0%").length).toBeGreaterThan(0);
-  expect(screen.getByRole("button", { name: "ROLL" })).toBeEnabled();
+  expect(
+    screen.queryByRole("button", { name: "Stop" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.getAllByRole("button", { name: "Resume" }).length,
+  ).toBeGreaterThan(0);
+
+  vi.mocked(resumeSearch).mockResolvedValue({
+    ...searching,
+    source: "search",
+    simulations: 5,
+    nodes: 12,
+    elapsed: 1.4,
+    horizon: 2,
+    running: true,
+  });
+  fireEvent.click(screen.getAllByRole("button", { name: "Resume" })[0]);
+
+  await waitFor(() => {
+    expect(resumeSearch).toHaveBeenCalledWith("game-123", "job-1");
+  });
+  expect(
+    screen.getAllByRole("button", { name: "Stop" }).length,
+  ).toBeGreaterThan(0);
+  expect(
+    screen.queryByRole("button", { name: "Resume" }),
+  ).not.toBeInTheDocument();
 });
 
 test("a human Action cancels the search for the previous Position", async () => {
@@ -494,7 +524,9 @@ test("a human Action cancels the search for the previous Position", async () => 
   fireEvent.click(screen.getByRole("button", { name: "ROLL" }));
 
   await waitFor(() => {
-    expect(stopSearch).toHaveBeenCalledWith("game-123", "job-1");
+    expect(stopSearch).toHaveBeenCalledWith("game-123", "job-1", {
+      cancel: true,
+    });
     expect(startSearch).toHaveBeenCalledWith(
       "game-123",
       expect.objectContaining({ mode: "continuous", state_index: 13 }),
@@ -513,7 +545,9 @@ test("leaving Coach Mode cancels an active search", async () => {
   fireEvent.click(coachModeSwitch());
 
   await waitFor(() =>
-    expect(stopSearch).toHaveBeenCalledWith("game-123", "job-1"),
+    expect(stopSearch).toHaveBeenCalledWith("game-123", "job-1", {
+      cancel: true,
+    }),
   );
   expect(screen.queryByText("ROLL 51.0%")).not.toBeInTheDocument();
   expect(coachModeSwitch()).not.toBeChecked();

@@ -24,6 +24,7 @@ export default function PlayerStateBox({
   );
   return (
     <div className={cn("player-state-box foreground", color)}>
+      <div className="seat-name">{color}</div>
       <ResourceCards playerState={playerState} playerKey={playerKey} />
       <div className="scores">
         <div

@@ -33,7 +33,7 @@ function ReplayScreen() {
   const [lines, setLines] = useState<PositionLinesReport | null>(null);
   const [linesError, setLinesError] = useState<string | null>(null);
   const [hoverAction, setHoverAction] = useState<string | null>(null);
-  const { snapshot, stop } = useSearchStream({
+  const { snapshot, stop, resume } = useSearchStream({
     gameId,
     enabled: Boolean(gameId),
     stateIndex,
@@ -148,6 +148,7 @@ function ReplayScreen() {
           error={linesError}
           snapshot={snapshot}
           onStop={stop}
+          onResume={resume}
           onHoverAction={setHoverAction}
         />
         <ReviewPanel

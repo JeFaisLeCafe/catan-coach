@@ -90,6 +90,7 @@ test("search keeps the position summary and the played Action", () => {
   expect(merged.played).toBe("BUILD_SETTLEMENT 3");
   expect(formatSearchStatus(snapshot)).toContain("2 plies ahead");
   expect(formatSearchStatus(snapshot)).not.toContain("depth");
+  expect(formatSearchStatus(snapshot)).not.toContain("±");
 });
 
 test("timed presets become a duration and continuous does not", () => {

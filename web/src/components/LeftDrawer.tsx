@@ -45,6 +45,7 @@ function DrawerContent({
   analysis,
   snapshot,
   onStopSearch,
+  onResumeSearch,
   onHoverAction,
   presentationDelay,
   onPresentationDelay,
@@ -55,6 +56,7 @@ function DrawerContent({
   analysis?: LiveAnalysis | null;
   snapshot?: SearchSnapshot | null;
   onStopSearch?: () => void;
+  onResumeSearch?: () => void;
   onHoverAction?: (action: string | null) => void;
   presentationDelay?: number;
   onPresentationDelay?: (milliseconds: number) => void;
@@ -90,6 +92,7 @@ function DrawerContent({
           analysis={analysis}
           snapshot={snapshot}
           onStop={onStopSearch}
+          onResume={onResumeSearch}
           onHoverAction={onHoverAction}
         />
       )}
@@ -117,6 +120,7 @@ export default function LeftDrawer({
   analysis,
   snapshot,
   onStopSearch,
+  onResumeSearch,
   onHoverAction,
   presentationDelay,
   onPresentationDelay,
@@ -126,6 +130,7 @@ export default function LeftDrawer({
   analysis?: LiveAnalysis | null;
   snapshot?: SearchSnapshot | null;
   onStopSearch?: () => void;
+  onResumeSearch?: () => void;
   onHoverAction?: (action: string | null) => void;
   presentationDelay?: number;
   onPresentationDelay?: (milliseconds: number) => void;
@@ -174,6 +179,7 @@ export default function LeftDrawer({
             analysis={analysis}
             snapshot={snapshot}
             onStopSearch={onStopSearch}
+            onResumeSearch={onResumeSearch}
             onHoverAction={onHoverAction}
             presentationDelay={presentationDelay}
             onPresentationDelay={onPresentationDelay}
@@ -192,6 +198,7 @@ export default function LeftDrawer({
             analysis={analysis}
             snapshot={snapshot}
             onStopSearch={onStopSearch}
+            onResumeSearch={onResumeSearch}
             onHoverAction={onHoverAction}
             presentationDelay={presentationDelay}
             onPresentationDelay={onPresentationDelay}

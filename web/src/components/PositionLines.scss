@@ -1,56 +1,29 @@
 .position-lines {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  font-size: 0.8rem;
+  gap: 8px;
+  min-height: 0;
+  color: #f3f0e8;
+  font-size: 0.84rem;
 
   h3,
   p {
     margin: 0;
   }
 
-  .position-notice,
-  .position-meta,
-  .position-probability {
-    color: #bbb;
-  }
-
   ol {
     margin: 0;
     padding: 0;
     list-style: none;
+    overflow: auto;
   }
+}
 
-  li {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    margin-bottom: 8px;
-    padding: 6px;
-    border: 1px solid #333;
-    border-left-width: 4px;
-    border-left-color: #7dcea0;
-    border-radius: 4px;
-    cursor: pointer;
+.position-notice,
+.position-meta {
+  color: #b7b1a4;
+}
 
-    &:hover {
-      background: rgba(246, 201, 69, 0.12);
-    }
-  }
-
-  .is-played {
-    border-left-color: #e6b15a;
-  }
-
-  .search-status {
-    color: #bbb;
-  }
-
-  .search-status.is-search {
-    color: #7dcea0;
-  }
-
-  .position-rank {
-    color: #bbb;
-  }
+.position-meta {
+  font-variant-numeric: tabular-nums;
 }

@@ -44,7 +44,8 @@ h6.MuiTypography-h6 {
 
 main {
   .logo {
-    margin: 5px 20px 0 20px;
+    margin: 4px 16px 0;
+    font-size: 1.15rem;
     text-align: center;
   }
 
@@ -99,19 +100,15 @@ main {
 // Medium screens - Left drawer permanent
 @media (min-width: variables.$md-breakpoint) {
   main {
-    padding-left: 280px;
+    padding-left: variables.$left-drawer;
     .board-container {
       margin-right: 0;
     }
   }
 }
 
-// Large screens - Both drawers permanent
 @media (min-width: variables.$lg-breakpoint) {
-  main {
-    padding-left: 0px;
-    .board-container {
-      margin-left: 140px;
-    }
+  main .board-container {
+    margin-left: 0;
   }
 }
