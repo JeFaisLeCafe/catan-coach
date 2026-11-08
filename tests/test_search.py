@@ -92,6 +92,20 @@ def test_the_first_snapshot_is_the_model_ranking() -> None:
     assert first.uncertainty == 0.0
 
 
+def test_a_simulation_budget_needs_a_count() -> None:
+    with pytest.raises(ValueError, match="positive count"):
+        Budget("simulations")
+
+
+def test_a_simulation_budget_stops_at_the_count() -> None:
+    snapshots = list(
+        _run(_tree(), Budget("simulations", simulations=3), clock=lambda: 0.0, stop=lambda: False)
+    )
+
+    assert snapshots[-1].simulations == 3
+    assert snapshots[-1].source == "search"
+
+
 def test_a_timed_budget_stops_when_the_clock_passes_it() -> None:
     now = {"t": 0.0}
     generator = _run(_tree(), Budget("timed", 1.0), clock=lambda: now["t"], stop=lambda: False)

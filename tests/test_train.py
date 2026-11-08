@@ -6,8 +6,15 @@ import numpy as np
 import pytest
 
 from catan_coach.domain.corpus import TRAIN, VALIDATION, Corpus
+from catan_coach.domain.prediction import FeatureMatrix, Probabilities
 from catan_coach.models.baselines import ConstantModel, VictoryPointShareModel
-from catan_coach.models.train import compare_to_baselines, format_comparison, train
+from catan_coach.models.train import (
+    clears_adoption,
+    compare_to_baselines,
+    format_comparison,
+    install_candidate,
+    train,
+)
 
 VP_COLUMNS = (0, 1, 2, 3)
 N_PLAYERS = 4
@@ -88,6 +95,36 @@ class TestTrain:
             trained.predict(corpus.observations[:5]), abs=1e-9
         )
 
+    def test_a_saved_map_reloads_with_the_model(self, tmp_path: Path) -> None:
+        from catan_coach.domain.probability_map import fit_probability_map
+        from catan_coach.models.gbdt import GbdtModel, calibration_sidecar
+
+        corpus = _corpus(seed=11)
+        path = tmp_path / "model.txt"
+        raw = np.full(len(corpus.won), 0.2)
+        mapped = train(corpus, seed=11).with_probability_map(
+            fit_probability_map(raw, np.ones(len(raw)))
+        )
+        mapped.save(path)
+        loaded = GbdtModel.load(path)
+
+        assert calibration_sidecar(path).is_file()
+        assert loaded.probability_map is not None
+        assert float(loaded.predict(corpus.observations[:4]).mean()) > 0.9
+
+    def test_writing_the_map_leaves_the_tree_file_unchanged(self, tmp_path: Path) -> None:
+        from catan_coach.domain.probability_map import fit_probability_map
+        from catan_coach.models.gbdt import GbdtModel, write_probability_map
+
+        corpus = _corpus(seed=12)
+        path = tmp_path / "model-v3.txt"
+        train(corpus, seed=12).save(path)
+        trees = path.read_bytes()
+        write_probability_map(path, fit_probability_map(np.full(8, 0.2), np.ones(8)))
+
+        assert path.read_bytes() == trees
+        assert float(GbdtModel.load(path).predict(corpus.observations[:4]).mean()) > 0.9
+
     def test_the_model_beats_both_baselines_on_held_out_games(self) -> None:
         corpus = _corpus(train_games=60, val_games=20, seed=2)
         model = train(corpus, seed=2)
@@ -148,6 +185,153 @@ class TestTrain:
         assert len(reasons) == 3
         for group in reasons:
             assert {item.label for item in group} <= set(PLAYER_LABELS)
+
+
+class _Overconfident:
+    name = "overconfident"
+
+    def predict(self, features: FeatureMatrix) -> Probabilities:
+        return np.full(features.shape[0], 0.99, dtype=np.float64)
+
+
+def test_a_candidate_must_beat_the_installed_model() -> None:
+    corpus = _corpus(train_games=60, val_games=20, seed=6)
+    model = train(corpus, seed=6)
+    same = compare_to_baselines(
+        model,
+        corpus,
+        constant=ConstantModel(N_PLAYERS),
+        vp_share=VictoryPointShareModel(VP_COLUMNS),
+        installed=model,
+    )
+    better = compare_to_baselines(
+        model,
+        corpus,
+        constant=ConstantModel(N_PLAYERS),
+        vp_share=VictoryPointShareModel(VP_COLUMNS),
+        installed=_Overconfident(),
+    )
+
+    assert same.beats_installed is False
+    assert same.ece_better_than_installed is False
+    assert "does not beat overconfident" not in format_comparison(
+        same, corpus_path="toy", n_games=corpus.n_games
+    )
+    assert "does not beat" in format_comparison(same, corpus_path="toy", n_games=1)
+    assert clears_adoption(better)
+    assert "beats overconfident on Brier skill" in format_comparison(
+        better, corpus_path="toy", n_games=1
+    )
+
+
+def test_brier_adopts_when_calibration_error_is_worse() -> None:
+    from catan_coach.domain.calibration import calibration_report
+    from catan_coach.models.train import BaselineComparison
+
+    report = calibration_report([0.4], [1.0])
+    comparison = BaselineComparison(
+        model_report=report,
+        constant_report=report,
+        vp_share_report=report,
+        model_name="candidate",
+        constant_name="constant(1/4)",
+        vp_share_name="vp-share",
+        beats_constant=True,
+        beats_vp_share=True,
+        ece_better_than_vp_share=False,
+        skill_vs_constant=0.1,
+        skill_vs_vp_share=0.1,
+        installed_name="installed",
+        beats_installed=True,
+        ece_better_than_installed=False,
+        skill_vs_installed=0.1,
+    )
+
+    assert clears_adoption(comparison)
+
+
+def test_a_failed_candidate_is_not_copied_over_the_installed_model(tmp_path: Path) -> None:
+    corpus = _corpus(train_games=40, val_games=12, seed=8)
+    model = train(corpus, seed=8)
+    comparison = compare_to_baselines(
+        model,
+        corpus,
+        constant=ConstantModel(N_PLAYERS),
+        vp_share=VictoryPointShareModel(VP_COLUMNS),
+        installed=model,
+    )
+    installed = tmp_path / "model.txt"
+    candidate = tmp_path / "candidate.txt"
+    installed.write_bytes(b"kept")
+    candidate.write_bytes(b"new")
+
+    assert install_candidate(candidate, installed, comparison) is False
+    assert installed.read_bytes() == b"kept"
+
+
+def test_a_candidate_that_clears_the_bars_replaces_the_installed_model(tmp_path: Path) -> None:
+    corpus = _corpus(train_games=60, val_games=20, seed=9)
+    model = train(corpus, seed=9)
+    comparison = compare_to_baselines(
+        model,
+        corpus,
+        constant=ConstantModel(N_PLAYERS),
+        vp_share=VictoryPointShareModel(VP_COLUMNS),
+        installed=_Overconfident(),
+    )
+    installed = tmp_path / "model.txt"
+    candidate = tmp_path / "candidate.txt"
+    installed.write_bytes(b"old")
+    candidate.write_bytes(b"new")
+
+    assert install_candidate(candidate, installed, comparison) is True
+    assert installed.read_bytes() == b"new"
+
+
+def test_installing_copies_the_map_and_drops_a_stale_one(tmp_path: Path) -> None:
+    from catan_coach.models.gbdt import calibration_sidecar
+
+    corpus = _corpus(train_games=60, val_games=20, seed=9)
+    model = train(corpus, seed=9)
+    comparison = compare_to_baselines(
+        model,
+        corpus,
+        constant=ConstantModel(N_PLAYERS),
+        vp_share=VictoryPointShareModel(VP_COLUMNS),
+        installed=_Overconfident(),
+    )
+    installed = tmp_path / "model.txt"
+    candidate = tmp_path / "candidate.txt"
+    installed.write_bytes(b"old")
+    candidate.write_bytes(b"new")
+    calibration_sidecar(installed).write_text("stale", encoding="utf-8")
+    calibration_sidecar(candidate).write_text('{"knots": [[0, 0.2], [1, 0.8]]}', encoding="utf-8")
+
+    assert install_candidate(candidate, installed, comparison) is True
+    assert calibration_sidecar(installed).read_text(encoding="utf-8").startswith('{"knots"')
+
+    other = tmp_path / "plain.txt"
+    other.write_bytes(b"plain")
+    installed.write_bytes(b"old")
+    assert install_candidate(other, installed, comparison) is True
+    assert not calibration_sidecar(installed).exists()
+
+
+def test_the_installed_path_cannot_be_the_candidate_path(tmp_path: Path) -> None:
+    corpus = _corpus(train_games=60, val_games=20, seed=10)
+    model = train(corpus, seed=10)
+    comparison = compare_to_baselines(
+        model,
+        corpus,
+        constant=ConstantModel(N_PLAYERS),
+        vp_share=VictoryPointShareModel(VP_COLUMNS),
+        installed=_Overconfident(),
+    )
+    path = tmp_path / "model.txt"
+    path.write_bytes(b"same")
+
+    with pytest.raises(ValueError, match="itself"):
+        install_candidate(path, path, comparison)
 
 
 def test_n_games_counts_games_not_rows() -> None:

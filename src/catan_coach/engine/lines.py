@@ -12,11 +12,13 @@ from catanatron.game import Game
 from catanatron.models.enums import CITY, SETTLEMENT, Action, ActionPrompt, ActionType
 from catanatron.models.map import LandTile, number_probability
 
-from catan_coach.domain.analysis import RankedAction, analyze
+from catan_coach.domain.analysis import RankedAction
 from catan_coach.domain.prediction import WinProbabilityModel
 from catan_coach.domain.review import NEAR_TIE_LOSS
-from catan_coach.engine.position import EnginePosition, _copy_without_sharing_rng, action_label
+from catan_coach.engine.position import _copy_without_sharing_rng, action_label
 from catan_coach.engine.review import match_played_label
+from catan_coach.engine.scoring import rank_resolved
+from catan_coach.engine.trades import describe_offer, listed_actions
 
 LINE_COUNT = 5
 # A new resource is worth about as much as a weak number. Same ratio the
@@ -26,7 +28,7 @@ _RESOURCE_VARIETY = 4 * 2.778 / 100
 
 def action_summaries(game: Game) -> dict[str, str]:
     """A short reading of every legal Action, using the same wording as position lines."""
-    return {action_label(action): _view(game, action)[1] for action in game.playable_actions}
+    return {action_label(action): _view(game, action)[1] for action in listed_actions(game)}
 
 
 def position_lines(
@@ -51,8 +53,8 @@ def position_lines(
             "lines": [],
         }
 
-    views = {action_label(action): _view(game, action) for action in game.playable_actions}
-    analysis = analyze(EnginePosition(game), model)
+    views = {action_label(action): _view(game, action) for action in listed_actions(game)}
+    analysis = rank_resolved(game, model)
     best = analysis.ranked[0].win_probability
     contenders = [row for row in analysis.ranked if best - row.win_probability <= NEAR_TIE_LOSS]
     others = [row for row in analysis.ranked if best - row.win_probability > NEAR_TIE_LOSS]
@@ -120,6 +122,8 @@ def _view(game: Game, action: Action) -> tuple[float, str]:
         return _node_pips(game, value), _describe_node(game, value)
     if action.action_type == ActionType.BUILD_ROAD:
         return _road_view(game, _edge(value))
+    if action.action_type == ActionType.OFFER_TRADE and isinstance(value, tuple):
+        return 0.0, describe_offer(value)
     return 0.0, ""
 
 

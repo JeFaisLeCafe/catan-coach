@@ -54,19 +54,33 @@ uv run pytest -m engine            # plays real games; also verifies the catanat
 
 ## Status
 
-Foundations only. The calibration harness and its baselines exist; the corpus, the learned
-model, and the analyzer do not yet.
+Catan Coach is a working local coaching app. It can:
 
-Current baselines over 788 sampled positions from 24 self-play games:
+- play a browser game against bots, autosave it, resume it, and replay it;
+- switch between Challenge Mode and live Coach Mode;
+- rank every legal Action with the installed model;
+- refine an Analysis with progressive search and show representative continuations;
+- review a completed game and order decisions by Loss;
+- generate resumable self-play Corpora, train candidates, calibrate them, and gate adoption.
 
-| model            | brier  | log loss | ece    |
-| ---------------- | ------ | -------- | ------ |
-| `constant(1/4)`  | 0.2084 | 0.6083   | 0.0419 |
-| `vp-share(T=2)`  | 0.1697 | 0.5101   | 0.0979 |
+Table Recorder, for faithfully entering a physical game and its random outcomes, is the remaining
+planned product feature.
 
-Brier skill of `vp-share` over `constant`: **+0.186**.
+The bundled model is generation 7. Its provenance, held-out result, and reproduction command are
+recorded in [docs/model.md](./docs/model.md).
 
-Note that `vp-share` has the better Brier score but the *worse* ECE. `constant` is well
-calibrated and completely undiscriminating; `vp-share` discriminates but is badly underconfident
-(when it says 44% the player actually wins 95%). This is exactly why both numbers are reported,
-and it is the trap a single metric would hide.
+## Model workflow
+
+```bash
+uv run catan-coach corpus --games 1000 --players model --model model.txt --out data/corpus-next
+uv run catan-coach train --corpus data/corpus-next --out data/model-next.txt
+uv run catan-coach calibrate \
+  --model data/model-next.txt \
+  --corpus data/corpus-next \
+  --installed model.txt \
+  --out model.txt
+```
+
+`calibrate` fits a monotone probability map on one set of held-out games and evaluates it on
+different held-out games. It replaces the installed model only when Brier skill beats
+`constant(1/4)`, `vp-share`, and the installed model.

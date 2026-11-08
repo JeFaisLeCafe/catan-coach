@@ -5,19 +5,27 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import tempfile
 from collections.abc import Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from catan_coach.domain.analysis import Analysis
 from catan_coach.domain.corpus import DEFAULT_VALIDATION_FRACTION, Corpus, format_summary
 from catan_coach.domain.prediction import WinProbabilityModel
 
+if TYPE_CHECKING:
+    from catan_coach.models.gbdt import GbdtModel
+    from catan_coach.models.train import BaselineComparison
+
 _ANALYZE = "analyze"
 _CORPUS = "corpus"
 _TRAIN = "train"
+_ADOPT = "adopt"
+_CALIBRATE = "calibrate"
 _REPORT = "report"
 _PLAY = "play"
-_SUBCOMMANDS = {_ANALYZE, _CORPUS, _TRAIN, _REPORT, _PLAY}
+_SUBCOMMANDS = {_ANALYZE, _CORPUS, _TRAIN, _ADOPT, _CALIBRATE, _REPORT, _PLAY}
 
 
 _NEAR_TIE_LOSS = 0.01
@@ -109,9 +117,33 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
 
     train_parser = subparsers.add_parser(_TRAIN, help="train a Win Probability model on a Corpus")
-    train_parser.add_argument("--corpus", type=Path, required=True)
+    train_parser.add_argument("--corpus", type=Path, action="append", required=True)
     train_parser.add_argument("--out", type=Path, required=True)
     train_parser.add_argument("--seed", type=int, default=0)
+    train_parser.add_argument(
+        "--installed",
+        type=Path,
+        help="also require the candidate to beat this model; the file is not replaced",
+    )
+
+    adopt_parser = subparsers.add_parser(
+        _ADOPT,
+        help="train a candidate and replace the installed model only if it wins",
+    )
+    adopt_parser.add_argument("--corpus", type=Path, action="append", required=True)
+    adopt_parser.add_argument("--installed", type=Path, required=True)
+    adopt_parser.add_argument("--candidate", type=Path, required=True)
+    adopt_parser.add_argument("--seed", type=int, default=0)
+
+    calibrate_parser = subparsers.add_parser(
+        _CALIBRATE,
+        help="fit a monotone map and replace the installed model only if Brier clears",
+    )
+    calibrate_parser.add_argument("--model", type=Path, required=True)
+    calibrate_parser.add_argument("--corpus", type=Path, action="append", required=True)
+    calibrate_parser.add_argument("--installed", type=Path, required=True)
+    calibrate_parser.add_argument("--out", type=Path, required=True)
+    calibrate_parser.add_argument("--seed", type=int, default=0)
 
     report_parser = subparsers.add_parser(_REPORT, help="report a model against the Baselines")
     report_parser.add_argument("--corpus", type=Path, required=True)
@@ -127,6 +159,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_corpus(args)
     if args.command == _TRAIN:
         return _run_train(args)
+    if args.command == _ADOPT:
+        return _run_adopt(args)
+    if args.command == _CALIBRATE:
+        return _run_calibrate(args)
     if args.command == _REPORT:
         return _run_report(args)
     if args.command == _PLAY:
@@ -140,7 +176,6 @@ def _run_analyze(args: argparse.Namespace) -> int:
         print(f"No saved game at {path}", file=sys.stderr)
         return 1
 
-    from catan_coach.domain.analysis import analyze
     from catan_coach.engine.features import feature_names, public_vp_indices
     from catan_coach.engine.persist import position_at_ply, read_game
     from catan_coach.models.baselines import ConstantModel, VictoryPointShareModel
@@ -163,7 +198,7 @@ def _run_analyze(args: argparse.Namespace) -> int:
         print(f"No trained model at {args.model}; using vp-share", file=sys.stderr)
         model = VictoryPointShareModel(public_vp_indices(n_players))
 
-    analysis = analyze(position, model)
+    analysis = position.analyze(model)
     png_path = path.with_name(f"{path.stem}-ply-{args.ply}.png")
     position.write_png(png_path)
     print(format_analysis(analysis, model.name, png_path))
@@ -203,20 +238,144 @@ def _run_corpus(args: argparse.Namespace) -> int:
 
 
 def _run_train(args: argparse.Namespace) -> int:
-    from catan_coach.engine.corpus import read_corpus
-    from catan_coach.models.gbdt import GbdtModel
-    from catan_coach.models.train import train
-
+    installed: WinProbabilityModel | None = None
+    if args.installed is not None:
+        loaded = _installed_model(args.installed)
+        if isinstance(loaded, int):
+            return loaded
+        installed = loaded
     try:
-        corpus = read_corpus(args.corpus)
+        model, comparison, n_games = _fit_mixture(args.corpus, args.seed, installed)
     except ValueError as error:
         print(error, file=sys.stderr)
         return 1
-
-    model = train(corpus, seed=args.seed)
     model.save(args.out)
     print(f"Wrote {args.out}")
-    return _print_comparison(corpus, GbdtModel.load(args.out), args.corpus)
+    return _emit_comparison(
+        comparison,
+        args.corpus,
+        n_games,
+        require_installed=args.installed is not None,
+    )
+
+
+def _run_adopt(args: argparse.Namespace) -> int:
+    from catan_coach.models.gbdt import GbdtModel
+    from catan_coach.models.train import install_candidate
+
+    if args.candidate.resolve() == args.installed.resolve():
+        print("refusing to write the candidate over the installed model", file=sys.stderr)
+        return 1
+    if not args.installed.is_file():
+        print(f"No trained model at {args.installed}", file=sys.stderr)
+        return 1
+    try:
+        model, comparison, n_games = _fit_mixture(
+            args.corpus,
+            args.seed,
+            GbdtModel.load(args.installed, name="installed"),
+            model_name="candidate",
+        )
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return 1
+    model.save(args.candidate)
+    print(f"Wrote {args.candidate}")
+    code = _emit_comparison(comparison, args.corpus, n_games, require_installed=True)
+    if code != 0 or not install_candidate(args.candidate, args.installed, comparison):
+        print(f"Left {args.installed} unchanged")
+        return 1
+    print(f"Installed {args.installed}")
+    return 0
+
+
+def _run_calibrate(args: argparse.Namespace) -> int:
+    from catan_coach.engine.calibrate import calibrate_model
+    from catan_coach.models.train import format_comparison
+
+    if not args.model.is_file():
+        print(f"No trained model at {args.model}", file=sys.stderr)
+        return 1
+    if not args.installed.is_file():
+        print(f"No trained model at {args.installed}", file=sys.stderr)
+        return 1
+    try:
+        comparison, fit_games, report_games, installed = calibrate_model(
+            args.model,
+            args.corpus,
+            installed_path=args.installed,
+            out=args.out,
+            seed=args.seed,
+        )
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return 1
+    print(
+        f"Map fit on {fit_games} validation games. "
+        f"Report is the other {report_games}, which the map did not see."
+    )
+    print(
+        format_comparison(
+            comparison,
+            corpus_path=" + ".join(str(path) for path in args.corpus),
+            n_games=report_games,
+        )
+    )
+    if not installed:
+        print(f"Left {args.out} unchanged")
+        return 1
+    print(f"Installed {args.out}")
+    return 0
+
+
+def _fit_mixture(
+    paths: list[Path],
+    seed: int,
+    installed: WinProbabilityModel | None,
+    *,
+    model_name: str = "gbdt",
+) -> tuple[GbdtModel, BaselineComparison, int]:
+    from catan_coach.engine.features import public_vp_indices
+    from catan_coach.engine.mixture import materialize_mixture
+    from catan_coach.models.baselines import ConstantModel, VictoryPointShareModel
+    from catan_coach.models.train import compare_matrix, train_matrix
+
+    data = Path("data")
+    data.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=data) as directory:
+        mixture = materialize_mixture(paths, Path(directory))
+        model = train_matrix(mixture.train_features, mixture.train_won, seed=seed, name=model_name)
+        comparison = compare_matrix(
+            model,
+            mixture.validation_features,
+            mixture.validation_won,
+            constant=ConstantModel(mixture.n_players),
+            vp_share=VictoryPointShareModel(public_vp_indices(mixture.n_players)),
+            installed=installed,
+        )
+        return model, comparison, mixture.n_games
+
+
+def _emit_comparison(
+    comparison: BaselineComparison,
+    paths: list[Path],
+    n_games: int,
+    *,
+    require_installed: bool,
+) -> int:
+    from catan_coach.models.train import clears_adoption, format_comparison
+
+    print(
+        format_comparison(
+            comparison,
+            corpus_path=" + ".join(str(path) for path in paths),
+            n_games=n_games,
+        )
+    )
+    passed = comparison.beats_constant and comparison.beats_vp_share
+    if require_installed:
+        passed = clears_adoption(comparison)
+    return 0 if passed else 1
 
 
 def _run_report(args: argparse.Namespace) -> int:
@@ -234,27 +393,58 @@ def _run_report(args: argparse.Namespace) -> int:
     return _print_comparison(corpus, GbdtModel.load(args.model), args.corpus)
 
 
-def _print_comparison(corpus: Corpus, model: WinProbabilityModel, corpus_path: Path) -> int:
+def _installed_model(path: Path) -> WinProbabilityModel | int:
+    from catan_coach.models.gbdt import GbdtModel
+
+    if not path.is_file():
+        print(f"No trained model at {path}", file=sys.stderr)
+        return 1
+    return GbdtModel.load(path)
+
+
+def _comparison(
+    corpus: Corpus,
+    model: WinProbabilityModel,
+    installed: WinProbabilityModel | None,
+) -> BaselineComparison:
     from catan_coach.engine.features import public_vp_indices
     from catan_coach.models.baselines import ConstantModel, VictoryPointShareModel
-    from catan_coach.models.train import compare_to_baselines, format_comparison
+    from catan_coach.models.train import compare_to_baselines
 
     n_players = len({str(seat) for seat in corpus.seats})
+    return compare_to_baselines(
+        model,
+        corpus,
+        constant=ConstantModel(n_players),
+        vp_share=VictoryPointShareModel(public_vp_indices(n_players)),
+        installed=installed,
+    )
+
+
+def _print_comparison(
+    corpus: Corpus,
+    model: WinProbabilityModel,
+    corpus_paths: Path | list[Path],
+    *,
+    installed: WinProbabilityModel | None = None,
+    require_installed: bool = False,
+) -> int:
+    from catan_coach.models.train import clears_adoption, format_comparison
+
+    paths = corpus_paths if isinstance(corpus_paths, list) else [corpus_paths]
     try:
-        comparison = compare_to_baselines(
-            model,
-            corpus,
-            constant=ConstantModel(n_players),
-            vp_share=VictoryPointShareModel(public_vp_indices(n_players)),
-        )
+        comparison = _comparison(corpus, model, installed)
     except ValueError as error:
         print(error, file=sys.stderr)
         return 1
-    print(format_comparison(comparison, corpus_path=str(corpus_path), n_games=corpus.n_games))
-    if (
-        comparison.beats_constant
-        and comparison.beats_vp_share
-        and comparison.ece_better_than_vp_share
-    ):
-        return 0
-    return 1
+    print(
+        format_comparison(
+            comparison,
+            corpus_path=" + ".join(str(path) for path in paths),
+            n_games=corpus.n_games,
+        )
+    )
+    passed = comparison.beats_constant and comparison.beats_vp_share
+    if require_installed:
+        passed = clears_adoption(comparison)
+    return 0 if passed else 1

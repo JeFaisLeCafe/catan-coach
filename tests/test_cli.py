@@ -133,7 +133,7 @@ def test_an_out_of_range_ply_names_the_valid_range(
 def test_the_command_prints_an_analysis_and_writes_a_png(
     capsys: pytest.CaptureFixture[str], saved_game: Path
 ) -> None:
-    code = main([str(saved_game), "0"])
+    code = main([str(saved_game), "0", "--baseline", "vp-share"])
 
     captured = capsys.readouterr()
     assert code == 0
@@ -259,6 +259,31 @@ def test_the_train_command_writes_a_model_and_reports_baselines(
     report = capsys.readouterr()
     assert report_code == code
     assert "constant(1/4)" in report.out
+
+
+def test_adopt_refuses_to_overwrite_the_installed_model(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    model = tmp_path / "model.txt"
+    model.write_text("kept")
+
+    code = main(
+        [
+            "adopt",
+            "--corpus",
+            str(tmp_path),
+            "--installed",
+            str(model),
+            "--candidate",
+            str(model),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert "installed model" in captured.err
+    assert model.read_text() == "kept"
+    assert "Traceback" not in captured.err
 
 
 def test_a_missing_trained_model_is_a_readable_error(

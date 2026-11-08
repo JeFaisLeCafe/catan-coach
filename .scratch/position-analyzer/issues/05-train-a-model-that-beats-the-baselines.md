@@ -42,3 +42,7 @@ On 400 `ValueFunctionPlayer` games (44,144 rows): gbdt brier 0.1444 / ece 0.0370
 `vp-share` 0.1457 / 0.0548 and `constant(1/4)` 0.1875 / 0.000. The CI suite plants a hidden
 signal the VP baseline cannot see, so the beat-the-bar assertion stays fast and deterministic.
 On macOS LightGBM needs Homebrew `libomp`.
+
+ADR 0006 supersedes the original ECE adoption veto. ECE remains reported, but Brier skill gates
+adoption; a monotone map is fit on one held-out game split and must clear the Brier bars on a
+different held-out split. This avoids preferring a vague model merely because its ECE is lower.

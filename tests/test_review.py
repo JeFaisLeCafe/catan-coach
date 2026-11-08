@@ -1,9 +1,11 @@
+from collections.abc import Callable
+
 import pytest
 
 from catan_coach.domain.analysis import Contribution
 from catan_coach.domain.position import Action, Seat
 from catan_coach.domain.prediction import FeatureMatrix
-from catan_coach.domain.review import Decision, review_decisions
+from catan_coach.domain.review import Decision, choose_near_tie, review_decisions
 from tests.test_analysis import ScriptedPosition, StubModel, observation
 
 BEST = Action("BUILD_SETTLEMENT 8")
@@ -71,3 +73,22 @@ def test_review_rejects_a_played_action_that_was_not_legal() -> None:
             [decision(1, ONLY, {BEST: 1.0, PLAYED: 2.0})],
             model,
         )
+
+
+def test_an_exact_tie_breaks_on_the_action_label() -> None:
+    assert choose_near_tie((("b", 0.5), ("a", 0.5)), explore=False) == "a"
+
+
+def test_exploration_stays_inside_the_near_tie() -> None:
+    scored = (("bad", 0.1), ("ok", 0.5), ("also", 0.495))
+
+    def pick(choice: int) -> Callable[[int], int]:
+        return lambda _count: choice
+
+    picked = {choose_near_tie(scored, explore=True, pick=pick(index)) for index in range(2)}
+
+    assert picked == {"also", "ok"}
+
+
+def test_a_single_action_is_not_sampled() -> None:
+    assert choose_near_tie((("ROLL", 0.2),), explore=True, pick=lambda _count: 0) == "ROLL"

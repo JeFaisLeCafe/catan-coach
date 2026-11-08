@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from catan_coach.domain.corpus import VALIDATION, split_for_game
+import numpy as np
+
+from catan_coach.domain.corpus import TRAIN, VALIDATION, Corpus, combine_corpora, split_for_game
 
 
 class TestSplitByGame:
@@ -20,3 +22,29 @@ class TestSplitByGame:
 
         assert "train" in splits
         assert VALIDATION in splits
+
+
+def test_a_mixture_keeps_each_split_and_separates_game_ids() -> None:
+    def part(ids: list[int], splits: list[str]) -> Corpus:
+        count = len(ids)
+        return Corpus(
+            game_ids=np.array(ids, dtype=np.int64),
+            plies=np.zeros(count, dtype=np.int32),
+            seats=np.array(["RED"] * count),
+            splits=np.array(splits),
+            won=np.zeros(count),
+            observations=np.zeros((count, 3)),
+        )
+
+    mixed = combine_corpora(
+        [
+            part([0, 1], [TRAIN, VALIDATION]),
+            part([0, 1], [VALIDATION, TRAIN]),
+        ]
+    )
+
+    assert mixed.n_games == 4
+    assert len(set(mixed.game_ids.tolist())) == 4
+    first_validation = int(mixed.game_ids[1])
+    assert mixed.splits[mixed.game_ids == first_validation].tolist() == [VALIDATION]
+    assert set(mixed.splits.tolist()) == {TRAIN, VALIDATION}

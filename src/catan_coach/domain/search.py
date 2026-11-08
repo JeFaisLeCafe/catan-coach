@@ -11,14 +11,19 @@ from typing import Literal, Protocol
 
 @dataclass(frozen=True, slots=True)
 class Budget:
-    mode: Literal["immediate", "timed", "continuous"]
+    mode: Literal["immediate", "timed", "continuous", "simulations"]
     seconds: float | None = None
+    simulations: int | None = None
 
     def __post_init__(self) -> None:
         if self.mode == "timed" and (self.seconds is None or self.seconds <= 0):
             raise ValueError("a timed Search Budget needs a positive duration")
         if self.mode != "timed" and self.seconds is not None:
             raise ValueError("only a timed Search Budget has a duration")
+        if self.mode == "simulations" and (self.simulations is None or self.simulations < 1):
+            raise ValueError("a simulation Search Budget needs a positive count")
+        if self.mode != "simulations" and self.simulations is not None:
+            raise ValueError("only a simulation Search Budget has a count")
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,8 +101,13 @@ class SearchCache:
 
     @staticmethod
     def key(position_id: str, model: str, budget: Budget) -> str:
-        duration = "" if budget.seconds is None else f":{budget.seconds}"
-        return f"{position_id}|{model}|{budget.mode}{duration}"
+        if budget.seconds is not None:
+            extra = f":{budget.seconds}"
+        elif budget.simulations is not None:
+            extra = f":{budget.simulations}"
+        else:
+            extra = ""
+        return f"{position_id}|{model}|{budget.mode}{extra}"
 
     def get(self, key: str) -> Snapshot | None:
         return self._items.get(key)
@@ -140,6 +150,7 @@ def progressive_search(
         return
     started = clock()
     limit = budget.seconds if budget.mode == "timed" else None
+    simulation_limit = budget.simulations if budget.mode == "simulations" else None
     stats = {action: _Stats(prior=probability) for action, probability in prior}
     order = tuple(action for action, _ in prior)
     root_node = _Node(actions=order, priors=dict(prior))
@@ -152,7 +163,9 @@ def progressive_search(
     def halted() -> bool:
         if stop():
             return True
-        return limit is not None and _elapsed(clock, started) >= limit
+        if limit is not None and _elapsed(clock, started) >= limit:
+            return True
+        return simulation_limit is not None and simulations >= simulation_limit
 
     def allocate(count: int) -> bool:
         nonlocal slots

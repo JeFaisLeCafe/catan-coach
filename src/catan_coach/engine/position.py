@@ -8,8 +8,11 @@ from pathlib import Path
 from catanatron import Game
 from catanatron.models.enums import Action as EngineAction
 
+from catan_coach.domain.analysis import Analysis
 from catan_coach.domain.position import Action, Observation, Seat
+from catan_coach.domain.prediction import WinProbabilityModel
 from catan_coach.engine.features import feature_vector
+from catan_coach.engine.trades import listed_actions
 
 
 def action_label(action: EngineAction) -> str:
@@ -30,8 +33,9 @@ def _copy_without_sharing_rng(game: Game) -> Game:
 class EnginePosition:
     def __init__(self, game: Game) -> None:
         self._game = game
-        self._engine_actions = {action_label(action): action for action in game.playable_actions}
-        if len(self._engine_actions) != len(game.playable_actions):
+        actions = listed_actions(game)
+        self._engine_actions = {action_label(action): action for action in actions}
+        if len(self._engine_actions) != len(actions):
             raise ValueError("duplicate Action labels in Position")
 
     @property
@@ -53,6 +57,11 @@ class EnginePosition:
         clone = _copy_without_sharing_rng(self._game)
         clone.execute(self._engine_actions[action.label])
         return feature_vector(clone, actor)
+
+    def analyze(self, model: WinProbabilityModel) -> Analysis:
+        from catan_coach.engine.scoring import rank_resolved
+
+        return rank_resolved(self._game, model)
 
     def write_png(self, path: Path) -> Path:
         from catan_coach.engine.render import write_position_png

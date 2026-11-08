@@ -12,7 +12,8 @@ from catanatron.web.models import StoredAction, StoredGame, db, get_game_state
 from flask import abort
 from sqlalchemy import select
 
-from catan_coach.domain.position import Action
+from catan_coach.domain.analysis import Analysis
+from catan_coach.domain.position import Action, Position
 from catan_coach.domain.prediction import WinProbabilityModel
 from catan_coach.domain.review import (
     IMMEDIATE_SEARCH_BUDGET,
@@ -22,7 +23,7 @@ from catan_coach.domain.review import (
 )
 from catan_coach.engine.position import EnginePosition, action_label
 
-_CACHE_VERSION = 1
+_CACHE_VERSION = 2
 
 
 def match_played_label(recorded: str, legal: Sequence[str]) -> str:
@@ -109,6 +110,7 @@ def advance_blunder_report(
                     )
                 ],
                 model,
+                analyzer=_analyze_position,
             )
             cache["decisions"].extend(_decision_payload(row) for row in reviewed)
             if reviewed:
@@ -123,6 +125,15 @@ def advance_blunder_report(
     )
     _save_cache(cache_path, cache)
     return _payload(cache, model_name=model.name, fallback=fallback)
+
+
+def _analyze_position(
+    position: Position,
+    model: WinProbabilityModel,
+) -> Analysis:
+    if not isinstance(position, EnginePosition):
+        raise TypeError("engine review needs an EnginePosition")
+    return position.analyze(model)
 
 
 def _decision_payload(row: ReviewedDecision) -> dict[str, object]:
