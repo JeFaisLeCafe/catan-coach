@@ -96,3 +96,30 @@ its Position changes, its time budget expires, or the player stops it.
 **Presentation Delay**:
 A minimum visual pause before showing a completed bot Action. It performs no computation and does
 not improve an Analysis.
+
+### Learning from many games
+
+**Policy**:
+The rule a Seat uses to choose an Action. A model estimates Win Probability; a Policy turns those
+estimates, search results, and any explicit preferences into play.
+_Avoid_: AI (too broad), model (a Policy may use a model but is not the model)
+
+**Strategy Experiment**:
+A reproducible set of games that compares Policies under a declared Seat schedule, board seeds,
+opponent population, and rules. Its independent samples are games, not Positions.
+_Avoid_: benchmark (unless referring only to runtime), simulation (one implementation technique)
+
+**Intervention**:
+One declared change to a Policy used to test a strategic hypothesis, such as increasing its
+preference for settlements without changing anything else.
+_Avoid_: feature importance (describes a predictor, not a change in play)
+
+**Behavior Profile**:
+Descriptive measurements of how a Policy or Seat played across games: build order, awards, trades,
+robber use, production, and similar observable habits. A Behavior Profile describes association;
+it does not by itself establish that a habit caused wins.
+_Avoid_: play style (too vague), strategy (implies intent or causality)
+
+**Opponent Population**:
+The declared mix of Policies and strengths faced in a Strategy Experiment. A result against one
+Opponent Population is not assumed to transfer to another.
