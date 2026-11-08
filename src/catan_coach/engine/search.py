@@ -9,7 +9,6 @@ from catanatron.game import Game
 from catanatron.models.enums import ActionRecord, ActionType
 from catanatron.models.player import Color
 
-from catan_coach.domain.analysis import analyze
 from catan_coach.domain.prediction import WinProbabilityModel
 from catan_coach.domain.search import (
     Budget,
@@ -18,7 +17,9 @@ from catan_coach.domain.search import (
     progressive_search,
 )
 from catan_coach.engine.features import feature_vector
-from catan_coach.engine.position import EnginePosition, _copy_without_sharing_rng, action_label
+from catan_coach.engine.position import _copy_without_sharing_rng, action_label
+from catan_coach.engine.scoring import rank_resolved
+from catan_coach.engine.trades import listed_actions
 
 _DICE_WAYS = {2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 7: 6, 8: 5, 9: 4, 10: 3, 11: 2, 12: 1}
 
@@ -27,7 +28,7 @@ class _EngineState:
     def __init__(self, game: Game, model: WinProbabilityModel) -> None:
         self._game = game
         self._model = model
-        self._actions = {action_label(action): action for action in game.playable_actions}
+        self._actions = {action_label(action): action for action in listed_actions(game)}
 
     def seat(self) -> str:
         return str(self._game.state.current_color().name)
@@ -93,7 +94,7 @@ def refine_position(
             return
 
     clone = _copy_without_sharing_rng(game)
-    analysis = analyze(EnginePosition(clone), model)
+    analysis = rank_resolved(clone, model)
     prior = tuple((row.action.label, row.win_probability) for row in analysis.ranked)
     last: Snapshot | None = None
     for snapshot in progressive_search(

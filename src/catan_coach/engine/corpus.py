@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,8 +20,12 @@ from catan_coach.domain.corpus import (
     Split,
     split_for_game,
 )
+from catan_coach.engine.board import corpus_map
 from catan_coach.engine.features import feature_vector
-from catan_coach.engine.model_player import WinProbabilityPlayer
+from catan_coach.engine.model_player import (
+    CORPUS_SEARCH_SIMULATIONS,
+    WinProbabilityPlayer,
+)
 from catan_coach.models.gbdt import GbdtModel
 
 COLORS = (Color.RED, Color.BLUE, Color.WHITE, Color.ORANGE)
@@ -93,6 +98,14 @@ def generate_corpus(
     return _summarize(root)
 
 
+def read_corpora(paths: Sequence[Path | str]) -> Corpus:
+    from catan_coach.domain.corpus import combine_corpora
+
+    if not paths:
+        raise ValueError("need at least one Corpus")
+    return combine_corpora(tuple(read_corpus(path) for path in paths))
+
+
 def read_corpus(output_dir: Path | str) -> Corpus:
     files = sorted((Path(output_dir) / _GAMES_DIR).glob("*.parquet"))
     if not files:
@@ -136,7 +149,7 @@ def _play_and_persist(job: _Job) -> None:
     split = split_for_game(job.game_id, seed=job.seed, validation_fraction=job.validation_fraction)
     dest = root / _GAMES_DIR / f"{job.game_id:05d}.parquet"
     tmp = dest.with_name(f"{dest.name}.tmp")
-    _rows_to_frame(job.game_id, split, winner, samples).to_parquet(tmp)
+    _rows_to_frame(job.game_id, split, winner, samples, seed=job.game_id).to_parquet(tmp)
     tmp.replace(dest)
 
 
@@ -148,7 +161,11 @@ def _sample_game(
     players: str,
     model_path: str,
 ) -> tuple[str, list[tuple[int, str, np.ndarray]]] | None:
-    game = Game(_seat_players(players, model_path), seed=game_id)
+    game = Game(
+        _seat_players(players, model_path, explore=players == "model"),
+        seed=game_id,
+        catan_map=corpus_map(game_id),
+    )
     samples: list[tuple[int, str, np.ndarray]] = []
     ply = 0
     while game.winning_color() is None and game.state.num_turns < max_turns:
@@ -168,11 +185,22 @@ _CACHED_MODEL_PATH = ""
 
 
 def _seat_players(
-    players: str, model_path: str
+    players: str,
+    model_path: str,
+    *,
+    explore: bool = False,
 ) -> list[ValueFunctionPlayer | WinProbabilityPlayer]:
     if players == "value":
         return [ValueFunctionPlayer(color) for color in COLORS]
-    return [WinProbabilityPlayer(color, _load_model(model_path)) for color in COLORS]
+    return [
+        WinProbabilityPlayer(
+            color,
+            _load_model(model_path),
+            explore=explore,
+            search_simulations=CORPUS_SEARCH_SIMULATIONS if explore else 0,
+        )
+        for color in COLORS
+    ]
 
 
 def _load_model(model_path: str) -> GbdtModel:
@@ -188,6 +216,8 @@ def _rows_to_frame(
     split: Split,
     winner: str,
     samples: list[tuple[int, str, np.ndarray]],
+    *,
+    seed: int,
 ) -> pd.DataFrame:
     return pd.DataFrame(
         {
@@ -196,6 +226,7 @@ def _rows_to_frame(
             "seat": [seat for _, seat, _ in samples],
             "split": [split] * len(samples),
             "won": [float(seat == winner) for _, seat, _ in samples],
+            "seed": [seed] * len(samples),
             "observation": [observation.tolist() for _, _, observation in samples],
         }
     )
@@ -217,11 +248,15 @@ def _summarize(root: Path) -> CorpusSummary:
             rows_written=0,
             win_rate_by_seat=empty_rates,
         )
-    corpus = read_corpus(root)
     winners: dict[int, str] = {}
-    for game_id, seat, won in zip(corpus.game_ids, corpus.seats, corpus.won, strict=True):
-        if won:
-            winners[int(game_id)] = str(seat)
+    rows = 0
+    for path in files:
+        frame = pd.read_parquet(path, columns=["game_id", "seat", "won"])
+        rows += len(frame)
+        won = frame.loc[frame["won"] == 1]
+        if won.empty:
+            continue
+        winners[int(won["game_id"].iloc[0])] = str(won["seat"].iloc[0])
     played = len(winners)
     win_rate = dict(empty_rates)
     if played:
@@ -230,6 +265,6 @@ def _summarize(root: Path) -> CorpusSummary:
     return CorpusSummary(
         games_played=played,
         games_dropped=dropped,
-        rows_written=len(corpus.game_ids),
+        rows_written=rows,
         win_rate_by_seat=win_rate,
     )

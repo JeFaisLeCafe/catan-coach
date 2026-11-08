@@ -145,3 +145,74 @@ class TestCalibrationReport:
         text = format_report(calibration_report([0.5, 0.5], [1.0, 0.0]), name="coin")
         assert "coin" in text
         assert "brier=0.2500" in text
+
+
+def test_a_low_raw_probability_is_pulled_toward_the_outcome() -> None:
+    from catan_coach.domain.probability_map import fit_probability_map
+
+    raw = np.full(30, 0.2)
+    mapped = fit_probability_map(raw, np.ones(30)).apply(raw)
+
+    assert float(mapped.mean()) > 0.8
+
+
+def test_the_map_never_decreases() -> None:
+    from catan_coach.domain.probability_map import fit_probability_map
+
+    rng = np.random.default_rng(0)
+    raw = rng.uniform(0.0, 1.0, size=300)
+    outcomes = (rng.uniform(size=300) < 0.7).astype(np.float64)
+    applied = fit_probability_map(raw, outcomes).apply(np.linspace(0.0, 1.0, 40))
+
+    assert np.all(np.diff(applied) >= -1e-12)
+
+
+def test_equal_raw_probabilities_share_their_observed_rate() -> None:
+    from catan_coach.domain.probability_map import fit_probability_map
+
+    raw = np.array([0.2, 0.2, 0.8, 0.8])
+    outcomes = np.array([1.0, 0.0, 1.0, 1.0])
+    mapped = fit_probability_map(raw, outcomes).apply([0.2, 0.8])
+
+    assert mapped == pytest.approx([0.5, 1.0])
+
+
+def test_equal_raw_probabilities_are_independent_of_row_order() -> None:
+    from catan_coach.domain.probability_map import fit_probability_map
+
+    raw = np.array([0.2, 0.2, 0.8, 0.8])
+    outcomes = np.array([1.0, 0.0, 1.0, 1.0])
+    reordered = np.array([1, 0, 3, 2])
+
+    first = fit_probability_map(raw, outcomes)
+    second = fit_probability_map(raw[reordered], outcomes[reordered])
+
+    assert first.knots == second.knots
+
+
+def test_one_game_keeps_a_single_calibration_half() -> None:
+    from catan_coach.domain.probability_map import calibration_half
+
+    assert calibration_half(4, seed=2, source=1) == calibration_half(4, seed=2, source=1)
+
+
+def test_the_map_is_fit_only_on_its_half() -> None:
+    from catan_coach.domain.probability_map import calibration_half, fit_probability_map
+
+    game_ids = np.repeat(np.arange(20), 5)
+    rng = np.random.default_rng(1)
+    raw = rng.uniform(0.0, 1.0, size=game_ids.size)
+    outcomes = (rng.uniform(size=game_ids.size) < raw).astype(np.float64)
+    fit = np.array(
+        [calibration_half(int(game_id), seed=0, source=0) == "fit" for game_id in game_ids]
+    )
+    for game_id in np.unique(game_ids):
+        assert len(set(fit[game_ids == game_id].tolist())) == 1
+    assert np.any(fit) and np.any(~fit)
+
+    first = fit_probability_map(raw[fit], outcomes[fit])
+    flipped = outcomes.copy()
+    flipped[~fit] = 1.0 - flipped[~fit]
+    second = fit_probability_map(raw[fit], flipped[fit])
+
+    assert first.knots == second.knots

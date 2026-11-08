@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-from catan_coach.domain.analysis import Contribution, analyze
+from catan_coach.domain.analysis import Analysis, Contribution, analyze
 from catan_coach.domain.position import Action, Position
 from catan_coach.domain.prediction import WinProbabilityModel
 
@@ -51,6 +51,8 @@ def grade_loss(loss: float) -> Grade:
 def review_decisions(
     decisions: Sequence[Decision],
     model: WinProbabilityModel,
+    *,
+    analyzer: Callable[[Position, WinProbabilityModel], Analysis] = analyze,
 ) -> tuple[ReviewedDecision, ...]:
     """Score each decision and drop forced Actions.
 
@@ -59,7 +61,7 @@ def review_decisions(
     """
     reviewed: list[ReviewedDecision] = []
     for decision in decisions:
-        analysis = analyze(decision.position, model)
+        analysis = analyzer(decision.position, model)
         if analysis.is_forced:
             continue
         played = next(
@@ -84,3 +86,34 @@ def review_decisions(
             )
         )
     return tuple(reviewed)
+
+
+def choose_near_tie(
+    probabilities: Sequence[tuple[str, float]],
+    *,
+    explore: bool,
+    pick: Callable[[int], int] | None = None,
+) -> str:
+    """The best Action. Within a near-tie, `explore` asks `pick` to choose.
+
+    Without exploration, an exact tie breaks on Action label, ascending, which
+    is the same order Analysis uses. One Action is returned as it stands.
+    """
+    if not probabilities:
+        raise ValueError("no Actions to choose")
+    best = max(probability for _, probability in probabilities)
+    if explore:
+        band = [
+            label for label, probability in probabilities if best - probability <= NEAR_TIE_LOSS
+        ]
+    else:
+        band = [label for label, probability in probabilities if probability == best]
+    ordered = sorted(band)
+    if len(ordered) == 1 or not explore:
+        return ordered[0]
+    if pick is None:
+        raise ValueError("explore needs a picker")
+    index = pick(len(ordered))
+    if index < 0 or index >= len(ordered):
+        raise ValueError("picker returned an index outside the near-tie")
+    return ordered[index]

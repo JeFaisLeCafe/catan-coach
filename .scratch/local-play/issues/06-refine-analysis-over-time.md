@@ -25,5 +25,5 @@ then refines it in batches until stopped or its Search Budget expires.
 The first snapshot is the model ranking with zero simulations. Later snapshots sample dice and
 hidden outcomes, and the seat to move keeps the sampled Action that wins for them. A timed budget
 is checked between simulations. Stopping or replacing the search drops a snapshot that has not
-been published. The installed generation-1 model is the leaf; generation 2 stays uninstalled
-because its calibration did not beat vp-share.
+been published. Search uses whichever model is currently installed; see `docs/model.md` for its
+provenance and held-out result.

@@ -17,7 +17,6 @@ from flask import Flask, abort, jsonify, request, send_from_directory
 from flask.typing import ResponseReturnValue
 from sqlalchemy import select
 
-from catan_coach.domain.analysis import analyze
 from catan_coach.domain.prediction import WinProbabilityModel
 from catan_coach.domain.search import Budget
 from catan_coach.engine.features import feature_names, public_vp_indices
@@ -25,6 +24,7 @@ from catan_coach.engine.lines import position_lines
 from catan_coach.engine.position import EnginePosition, action_label
 from catan_coach.engine.review import advance_blunder_report
 from catan_coach.engine.search_session import SearchHub
+from catan_coach.engine.trades import install_trade_replies
 from catan_coach.models.baselines import VictoryPointShareModel
 
 _PROJECT_ROOT = Path(__file__).parents[3]
@@ -41,6 +41,7 @@ def create_local_app(
     model_path: Path = _DEFAULT_MODEL_PATH,
     testing: bool = False,
 ) -> Flask:
+    install_trade_replies()
     database_path.parent.mkdir(parents=True, exist_ok=True)
     review_cache = database_path.parent / "reviews"
     # Upstream routes call this module function directly and offer no app-level hook.
@@ -97,7 +98,7 @@ def create_local_app(
 
         position = EnginePosition(game)
         model, fallback = _load_analysis_model(position.num_players, model_path)
-        result = analyze(position, model)
+        result = position.analyze(model)
         return jsonify(
             {
                 "seat": result.seat.name,
