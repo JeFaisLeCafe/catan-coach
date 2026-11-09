@@ -25,7 +25,8 @@ _ADOPT = "adopt"
 _CALIBRATE = "calibrate"
 _REPORT = "report"
 _PLAY = "play"
-_SUBCOMMANDS = {_ANALYZE, _CORPUS, _TRAIN, _ADOPT, _CALIBRATE, _REPORT, _PLAY}
+_LAB = "lab"
+_SUBCOMMANDS = {_ANALYZE, _CORPUS, _TRAIN, _ADOPT, _CALIBRATE, _REPORT, _PLAY, _LAB}
 
 
 _NEAR_TIE_LOSS = 0.01
@@ -154,7 +155,27 @@ def main(argv: Sequence[str] | None = None) -> int:
     play_parser.add_argument("--port", type=int, default=5001)
     play_parser.add_argument("--no-browser", action="store_true")
 
+    lab_parser = subparsers.add_parser(_LAB, help="run a Strategy Lab experiment")
+    lab_commands = lab_parser.add_subparsers(dest="lab_command", required=True)
+    lab_run = lab_commands.add_parser("run", help="play or resume a plan")
+    lab_run.add_argument("plan", type=Path)
+    lab_run.add_argument("--out", type=Path, required=True)
+    lab_run.add_argument("--workers", type=int, default=1)
+    lab_run.add_argument("--allow-dirty", action="store_true")
+    lab_report = lab_commands.add_parser("report", help="summarize a finished or partial run")
+    lab_report.add_argument("experiment", type=Path)
+    lab_report.add_argument("--json", type=Path)
+    lab_report.add_argument("--markdown", type=Path)
+    lab_compare = lab_commands.add_parser("compare", help="compare preference variants")
+    lab_compare.add_argument("reference", type=Path)
+    lab_compare.add_argument("variants", type=Path, nargs="+")
+    lab_compare.add_argument("--seed", type=int, default=0)
+    lab_compare.add_argument("--json", type=Path)
+    lab_compare.add_argument("--markdown", type=Path)
+
     args = parser.parse_args(args_list)
+    if args.command == _LAB:
+        return _run_lab(args)
     if args.command == _CORPUS:
         return _run_corpus(args)
     if args.command == _TRAIN:
@@ -168,6 +189,27 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == _PLAY:
         return _run_play(args)
     return _run_analyze(args)
+
+
+def _run_lab(args: argparse.Namespace) -> int:
+    from catan_coach.engine.experiment_store import PlanMismatch
+    from catan_coach.engine.lab import DirtyWorktree, compare_dirs, report_dir, run_plan
+
+    try:
+        if args.lab_command == "run":
+            return run_plan(args.plan, args.out, workers=args.workers, allow_dirty=args.allow_dirty)
+        if args.lab_command == "report":
+            return report_dir(args.experiment, json_path=args.json, markdown_path=args.markdown)
+        return compare_dirs(
+            args.reference,
+            args.variants,
+            seed=args.seed,
+            json_path=args.json,
+            markdown_path=args.markdown,
+        )
+    except (DirtyWorktree, PlanMismatch, ValueError) as error:
+        print(error, file=sys.stderr)
+        return 1
 
 
 def _run_analyze(args: argparse.Namespace) -> int:

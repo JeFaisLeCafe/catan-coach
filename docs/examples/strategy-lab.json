@@ -1,0 +1,24 @@
+{
+  "name": "generation-7-smoke",
+  "candidate": {
+    "name": "generation-7",
+    "kind": "model",
+    "model_path": "../../model.txt",
+    "sidecar_path": "../../model.calibration.json",
+    "search_simulations": 4,
+    "explore": false
+  },
+  "opponent": {
+    "name": "ValueFunctionPlayer",
+    "kind": "value"
+  },
+  "games_per_candidate_seat": 1,
+  "base_seed": 20000,
+  "map_policy": "corpus",
+  "rules": {
+    "vps_to_win": 10,
+    "discard_limit": 7,
+    "friendly_robber": false,
+    "turn_limit": 1000
+  }
+}
