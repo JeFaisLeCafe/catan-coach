@@ -1,0 +1,28 @@
+{
+  "name": "settlement-preference",
+  "candidate": {
+    "name": "generation-7",
+    "kind": "model",
+    "model_path": "../../../model.txt",
+    "sidecar_path": "../../../model.calibration.json",
+    "search_simulations": 0,
+    "explore": false,
+    "preferences": [
+      {"category": "settlement", "delta": 0.05}
+    ]
+  },
+  "opponent": {
+    "name": "ValueFunctionPlayer",
+    "kind": "value"
+  },
+  "player_count": 4,
+  "games_per_candidate_seat": 1000,
+  "base_seed": 30000,
+  "map_policy": "corpus",
+  "rules": {
+    "vps_to_win": 10,
+    "discard_limit": 7,
+    "friendly_robber": false,
+    "turn_limit": 1000
+  }
+}

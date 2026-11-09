@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+from collections.abc import Callable
 
 from catanatron.game import Game
 from catanatron.models.enums import Action, ActionPrompt, ActionType
@@ -20,6 +21,8 @@ from catan_coach.engine.trades import listed_actions
 CORPUS_SEARCH_SIMULATIONS = 4
 CORPUS_SEARCH_DEPTH = 16
 
+PreferenceAdjuster = Callable[[Game, Action], float]
+
 
 class WinProbabilityPlayer(Player):  # type: ignore[misc]
     """Chooses by the model. Exact ties break on Action label, matching Analysis.
@@ -36,11 +39,15 @@ class WinProbabilityPlayer(Player):  # type: ignore[misc]
         *,
         explore: bool = False,
         search_simulations: int = 0,
+        preferences: PreferenceAdjuster | None = None,
     ) -> None:
+        if preferences is not None and search_simulations > 0:
+            raise ValueError("preferences require zero search simulations")
         super().__init__(color)
         self._model = model
         self._explore = explore
         self._search_simulations = search_simulations
+        self._preferences = preferences
 
     def decide(self, game: Game, playable_actions: list[Action]) -> Action:
         actions = _choices(game, playable_actions)
@@ -48,12 +55,16 @@ class WinProbabilityPlayer(Player):  # type: ignore[misc]
             return actions[0]
         if self._search_simulations > 0:
             probabilities = _search_probabilities(game, self._model, self._search_simulations)
-            return _choose(actions, probabilities, game, explore=self._explore)
+            return _choose(
+                actions, probabilities, game, explore=self._explore, adjust=self._preferences
+            )
         if game.state.current_prompt == ActionPrompt.DECIDE_TRADE:
             return _reply(game, playable_actions, reply_helps(game, self._model))
         ranked = rank_resolved(game, self._model)
         probabilities = {row.action.label: row.win_probability for row in ranked.ranked}
-        return _choose(actions, probabilities, game, explore=self._explore)
+        return _choose(
+            actions, probabilities, game, explore=self._explore, adjust=self._preferences
+        )
 
 
 def _choices(game: Game, playable_actions: list[Action]) -> list[Action]:
@@ -89,12 +100,17 @@ def _choose(
     game: Game,
     *,
     explore: bool,
+    adjust: PreferenceAdjuster | None = None,
 ) -> Action:
-    ranked = [
-        (action_label(action), probabilities[action_label(action)])
-        for action in actions
-        if action_label(action) in probabilities
-    ]
+    ranked: list[tuple[str, float]] = []
+    for action in actions:
+        label = action_label(action)
+        if label not in probabilities:
+            continue
+        utility = probabilities[label]
+        if adjust is not None:
+            utility += adjust(game, action)
+        ranked.append((label, utility))
     if not ranked:
         raise ValueError("no scored Action is legal")
     label = choose_near_tie(

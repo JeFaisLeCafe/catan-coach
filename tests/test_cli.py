@@ -286,6 +286,46 @@ def test_adopt_refuses_to_overwrite_the_installed_model(
     assert "Traceback" not in captured.err
 
 
+def test_model_paths_resolve_from_the_plan_file(tmp_path: Path) -> None:
+    from catan_coach.engine.lab import load_config
+
+    directory = tmp_path / "plans"
+    directory.mkdir()
+    model = directory / "model.txt"
+    model.write_bytes(b"trees")
+    plan = directory / "plan.json"
+    plan.write_text(
+        '{"name":"smoke","candidate":{"name":"candidate","kind":"model","model_path":"model.txt"},'
+        '"opponent":{"name":"value","kind":"value"},'
+        '"games_per_candidate_seat":1,"base_seed":1}',
+        encoding="utf-8",
+    )
+
+    loaded = load_config(plan)
+
+    assert loaded.candidate.model_path is not None
+    assert Path(loaded.candidate.model_path).resolve() == model.resolve()
+
+
+def test_lab_rejects_unknown_plan_fields(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    plan = tmp_path / "plan.json"
+    plan.write_text(
+        '{"name":"smoke","candidate":{"name":"random","kind":"random"},'
+        '"opponent":{"name":"value","kind":"value"},'
+        '"games_per_candidate_seat":1,"base_seed":1,"surprise":true}',
+        encoding="utf-8",
+    )
+
+    code = main(["lab", "run", str(plan), "--out", str(tmp_path / "out")])
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert "unknown plan field surprise" in captured.err
+    assert "Traceback" not in captured.err
+
+
 def test_a_missing_trained_model_is_a_readable_error(
     capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:

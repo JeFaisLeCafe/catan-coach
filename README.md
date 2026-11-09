@@ -63,8 +63,17 @@ Catan Coach is a working local coaching app. It can:
 - review a completed game and order decisions by Loss;
 - generate resumable self-play Corpora, train candidates, calibrate them, and gate adoption.
 
-Table Recorder, for faithfully entering a physical game and its random outcomes, is the remaining
-planned product feature.
+The Strategy Lab compares a named Policy with an Opponent Population and reports seat-balanced
+win rates, uncertainty, and descriptive behavior. A small example plan is
+[`docs/examples/strategy-lab.json`](./docs/examples/strategy-lab.json). The preregistered
+generation-7 audit and the settlement/city intervention are specified in
+[`docs/experiments/README.md`](./docs/experiments/README.md) and have not been run.
+
+```bash
+uv run catan-coach lab run docs/examples/strategy-lab.json --out data/experiments/smoke
+uv run catan-coach lab report data/experiments/smoke
+uv run catan-coach lab compare data/experiments/reference data/experiments/variant
+```
 
 The bundled model is generation 7. Its provenance, held-out result, and reproduction command are
 recorded in [docs/model.md](./docs/model.md).
