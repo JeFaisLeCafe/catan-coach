@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import subprocess
 from collections.abc import Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
@@ -19,6 +21,12 @@ from catan_coach.domain.corpus import (
     CorpusSummary,
     Split,
     split_for_game,
+)
+from catan_coach.domain.manifest import (
+    MANIFEST_NAME,
+    CorpusManifest,
+    PlayerKind,
+    training_refusal,
 )
 from catan_coach.engine.board import corpus_map
 from catan_coach.engine.features import feature_vector
@@ -71,10 +79,29 @@ def generate_corpus(
     if players == "model" and (model_path is None or not Path(model_path).is_file()):
         raise ValueError("model self-play needs a saved model file")
     model_file = "" if model_path is None else str(model_path)
+    kind: PlayerKind = "model" if players == "model" else "value"
+    revision, dirty = _git_identity()
+    invocation = CorpusManifest(
+        player_kind=kind,
+        model_sha256=_file_sha256(Path(model_file)) if kind == "model" else "",
+        search_simulations=CORPUS_SEARCH_SIMULATIONS if kind == "model" else 0,
+        exploration=kind == "model",
+        ply_stride=ply_stride,
+        base_seed=seed,
+        requested_games=n_games,
+        validation_fraction=validation_fraction,
+        max_turns=limit,
+        git_revision=revision,
+        dirty_tree=dirty,
+        games_finished=0,
+        games_dropped=0,
+        drop_rate=0.0,
+    )
 
     root = Path(output_dir)
     (root / _GAMES_DIR).mkdir(parents=True, exist_ok=True)
     (root / _DROPPED_DIR).mkdir(parents=True, exist_ok=True)
+    _bind_manifest(root, invocation)
 
     finished = {int(path.stem) for path in (root / _GAMES_DIR).glob("*.parquet")}
     already_dropped = {
@@ -95,7 +122,9 @@ def generate_corpus(
         if game_id not in finished and game_id not in already_dropped
     ]
     _run(jobs, workers)
-    return _summarize(root)
+    summary = _summarize(root)
+    _write_manifest(root, invocation.with_outcomes(summary.games_played, summary.games_dropped))
+    return summary
 
 
 def read_corpora(paths: Sequence[Path | str]) -> Corpus:
@@ -107,9 +136,11 @@ def read_corpora(paths: Sequence[Path | str]) -> Corpus:
 
 
 def read_corpus(output_dir: Path | str) -> Corpus:
-    files = sorted((Path(output_dir) / _GAMES_DIR).glob("*.parquet"))
+    root = Path(output_dir)
+    files = sorted((root / _GAMES_DIR).glob("*.parquet"))
     if not files:
         raise ValueError(f"no Corpus games in {output_dir}")
+    require_trainable_corpus(root)
     frame = pd.concat((pd.read_parquet(path) for path in files), ignore_index=True)
     observations = np.asarray(frame["observation"].to_list(), dtype=np.float64)
     return Corpus(
@@ -120,6 +151,85 @@ def read_corpus(output_dir: Path | str) -> Corpus:
         won=frame["won"].to_numpy(dtype=np.float64),
         observations=observations,
     )
+
+
+def require_trainable_corpus(output_dir: Path | str) -> None:
+    """Refuse a Corpus whose manifest is missing or whose drop rate is above 1%."""
+    root = Path(output_dir)
+    reason = training_refusal(_read_manifest(root))
+    if reason is not None:
+        raise ValueError(f"{reason}: {root}")
+
+
+def _bind_manifest(root: Path, invocation: CorpusManifest) -> None:
+    existing = _read_manifest(root)
+    if existing is None:
+        if _has_recorded_games(root):
+            raise ValueError(f"Corpus directory {root} has games but no manifest")
+        _write_manifest(root, invocation)
+        return
+    conflicts = existing.resume_conflicts(invocation)
+    if conflicts:
+        fields = ", ".join(conflicts)
+        raise ValueError(f"Corpus manifest disagrees with this invocation ({fields})")
+
+
+def _read_manifest(root: Path) -> CorpusManifest | None:
+    path = root / MANIFEST_NAME
+    if not path.is_file():
+        return None
+    return CorpusManifest.from_json(path.read_text(encoding="utf-8"))
+
+
+def _write_manifest(root: Path, manifest: CorpusManifest) -> None:
+    dest = root / MANIFEST_NAME
+    temporary = dest.with_name(f"{dest.name}.tmp")
+    temporary.write_text(manifest.to_json(), encoding="utf-8")
+    temporary.replace(dest)
+
+
+def _has_recorded_games(root: Path) -> bool:
+    games = root / _GAMES_DIR
+    if games.is_dir() and any(games.glob("*.parquet")):
+        return True
+    dropped = root / _DROPPED_DIR
+    return dropped.is_dir() and any(path.name.isdigit() for path in dropped.iterdir())
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while True:
+            block = handle.read(1024 * 1024)
+            if not block:
+                break
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _git_identity() -> tuple[str, bool]:
+    revision = _git_text(["rev-parse", "HEAD"])
+    if revision is None:
+        return "unknown", False
+    status = _git_text(["status", "--porcelain"])
+    if status is None:
+        return revision, False
+    return revision, status != ""
+
+
+def _git_text(args: list[str]) -> str | None:
+    try:
+        completed = subprocess.run(
+            ["git", *args],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return None
+    if completed.returncode != 0:
+        return None
+    return completed.stdout.strip()
 
 
 def _run(jobs: list[_Job], workers: int) -> None:
