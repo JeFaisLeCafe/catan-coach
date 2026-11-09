@@ -9,7 +9,9 @@ from catan_coach.domain.calibration import (
     calibration_report,
     expected_calibration_error,
     format_report,
+    game_brier_difference,
     log_loss,
+    reference_cleared,
     reliability_bins,
 )
 
@@ -216,3 +218,59 @@ def test_the_map_is_fit_only_on_its_half() -> None:
     second = fit_probability_map(raw[fit], flipped[fit])
 
     assert first.knots == second.knots
+
+
+def test_a_candidate_worse_on_every_game_does_not_clear() -> None:
+    interval = game_brier_difference(
+        [0.40, 0.55, 0.30],
+        [0.10, 0.20, 0.05],
+        [1.0, 4.0, 2.0],
+    )
+
+    assert interval.point > 0.0
+    assert reference_cleared(interval) is False
+
+
+def test_a_candidate_better_on_every_game_clears() -> None:
+    interval = game_brier_difference(
+        [0.10, 0.20, 0.05],
+        [0.40, 0.55, 0.30],
+        [1.0, 4.0, 2.0],
+    )
+
+    assert interval.point < 0.0
+    assert interval.upper < 0.0
+    assert reference_cleared(interval) is True
+
+
+def test_a_tie_does_not_clear() -> None:
+    interval = game_brier_difference([0.2, 0.4], [0.2, 0.4], [3.0, 1.0])
+
+    assert interval.point == pytest.approx(0.0)
+    assert interval.upper == pytest.approx(0.0)
+    assert reference_cleared(interval) is False
+
+
+def test_the_interval_contains_the_point_estimate() -> None:
+    candidate = np.array([0.20, 0.50, 0.10, 0.40])
+    reference = np.array([0.25, 0.30, 0.30, 0.20])
+    weights = np.array([1.0, 5.0, 2.0, 4.0])
+    interval = game_brier_difference(candidate, reference, weights)
+    point = float(np.sum(weights * (candidate - reference)) / np.sum(weights))
+
+    assert interval.point == pytest.approx(point)
+    assert interval.lower <= interval.point <= interval.upper
+    assert interval.lower < interval.upper
+
+
+def test_the_resampling_seed_repeats() -> None:
+    candidate = np.array([0.20, 0.50, 0.10, 0.40, 0.33])
+    reference = np.array([0.25, 0.30, 0.30, 0.20, 0.10])
+    weights = np.array([1.0, 5.0, 2.0, 4.0, 3.0])
+
+    assert game_brier_difference(candidate, reference, weights, seed=0) == game_brier_difference(
+        candidate, reference, weights, seed=0
+    )
+    assert game_brier_difference(
+        candidate, reference, weights, resamples=25, seed=0
+    ) != game_brier_difference(candidate, reference, weights, resamples=25, seed=1)
