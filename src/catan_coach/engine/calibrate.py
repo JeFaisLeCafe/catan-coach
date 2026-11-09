@@ -33,6 +33,8 @@ class _Halves:
     report_won: np.ndarray
     report_vp: np.ndarray
     report_installed: np.ndarray
+    report_game_ids: np.ndarray
+    report_priors: tuple[np.ndarray, ...]
     report_games: int
 
 
@@ -43,19 +45,24 @@ def calibrate_model(
     installed_path: Path | str,
     out: Path | str,
     seed: int = 0,
+    prior_paths: Sequence[Path | str] = (),
 ) -> tuple[BaselineComparison, int, int, bool]:
     """Fit the map for `model_path` and copy it onto `out` only if Brier clears.
 
-    Predictions are kept; Observations are dropped after each game. Returns the
-    untouched-half report, how many games were fit, how many were reported,
-    and whether `out` was replaced.
+    Predictions are kept; Observations are dropped after each game. The report
+    half supplies one Brier score per game, so each reference must clear a
+    game-level 95% interval. `prior_paths` are extra models besides
+    `installed_path`; a CLI flag can forward paths here without any other
+    change. Returns the untouched-half report, how many games were fit, how
+    many were reported, and whether `out` was replaced.
     """
     trees = GbdtModel.load(model_path, name="candidate").without_probability_map()
     installed = GbdtModel.load(installed_path, name="installed")
+    prior_models = tuple(GbdtModel.load(path, name=Path(path).stem) for path in prior_paths)
     n_players = player_count(corpora)
     constant = ConstantModel(n_players)
     vp_share = VictoryPointShareModel(public_vp_indices(n_players))
-    halves = _score_halves(corpora, trees, installed, vp_share, seed=seed)
+    halves = _score_halves(corpora, trees, installed, vp_share, priors=prior_models, seed=seed)
     mapping = fit_probability_map(halves.fit_predicted, halves.fit_won)
     mapped = trees.with_probability_map(mapping)
     comparison = compare_predictions(
@@ -68,6 +75,11 @@ def calibrate_model(
         vp_name=vp_share.name,
         installed_predicted=halves.report_installed,
         installed_name=installed.name,
+        priors=tuple(
+            (model.name, predicted)
+            for model, predicted in zip(prior_models, halves.report_priors, strict=True)
+        ),
+        game_ids=halves.report_game_ids,
     )
     replaced = False
     if clears_adoption(comparison):
@@ -82,6 +94,7 @@ def _score_halves(
     installed: WinProbabilityModel,
     vp_share: WinProbabilityModel,
     *,
+    priors: Sequence[WinProbabilityModel] = (),
     seed: int,
 ) -> _Halves:
     fit_predicted: list[np.ndarray] = []
@@ -91,7 +104,10 @@ def _score_halves(
     report_won: list[np.ndarray] = []
     report_vp: list[np.ndarray] = []
     report_installed: list[np.ndarray] = []
+    report_game_ids: list[np.ndarray] = []
+    report_prior_rows: list[list[np.ndarray]] = [[] for _ in priors]
     report_games: set[int] = set()
+    next_game = 0
     for game in iter_validation_games(corpora):
         raw = _predict(trees, game.features)
         key = game.corpus_index * 1_000_003 + game.game_id
@@ -104,7 +120,11 @@ def _score_halves(
             report_won.append(game.won)
             report_vp.append(_predict(vp_share, game.features))
             report_installed.append(_predict(installed, game.features))
+            report_game_ids.append(np.full(raw.shape[0], next_game, dtype=np.int64))
+            for index, prior in enumerate(priors):
+                report_prior_rows[index].append(_predict(prior, game.features))
             report_games.add(key)
+            next_game += 1
     if not fit_predicted or not report_raw:
         raise ValueError("validation games did not cover both the map fit and the report")
     return _Halves(
@@ -115,6 +135,8 @@ def _score_halves(
         report_won=np.concatenate(report_won),
         report_vp=np.concatenate(report_vp),
         report_installed=np.concatenate(report_installed),
+        report_game_ids=np.concatenate(report_game_ids),
+        report_priors=tuple(np.concatenate(rows) for rows in report_prior_rows),
         report_games=len(report_games),
     )
 

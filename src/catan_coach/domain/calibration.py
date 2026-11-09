@@ -2,7 +2,9 @@
 
 A model that says "70%" should win about 70% of the time. Everything else in
 this project is downstream of that claim, so this module exists before any
-model does, and no model is adopted without beating a baseline here.
+model does, and no model is adopted without beating a baseline here. A
+supplied per-game sample clears a reference only when a game-level 95%
+interval on the Brier difference lies entirely below zero.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ Probabilities = NDArray[np.float64]
 Outcomes = NDArray[np.float64]
 
 DEFAULT_NUM_BINS = 10
+DEFAULT_GAME_RESAMPLES = 4_000
 
 # Keeps log loss finite when a model predicts exactly 0 or 1 and is wrong.
 _LOG_LOSS_EPSILON = 1e-15
@@ -139,6 +142,84 @@ def calibration_report(
         expected_calibration_error=expected_calibration_error(bins),
         bins=bins,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class GameBrierInterval:
+    """Row-weighted mean of candidate Brier minus reference Brier."""
+
+    point: float
+    lower: float
+    upper: float
+
+
+def game_brier_difference(
+    candidate: ArrayLike,
+    reference: ArrayLike,
+    weights: ArrayLike,
+    *,
+    resamples: int = DEFAULT_GAME_RESAMPLES,
+    seed: int = 0,
+) -> GameBrierInterval:
+    """Bootstrap games, not rows.
+
+    `candidate` and `reference` are per-game Brier scores. `weights` is the
+    row count of each game. `point` is the row-weighted mean of candidate
+    minus reference. `lower` and `upper` are the 2.5 and 97.5 percentiles of
+    that statistic over `resamples` draws with replacement. `seed` fixes the
+    draws.
+    """
+    candidate_brier = np.asarray(candidate, dtype=np.float64).ravel()
+    reference_brier = np.asarray(reference, dtype=np.float64).ravel()
+    weight = np.asarray(weights, dtype=np.float64).ravel()
+    if candidate_brier.shape != reference_brier.shape or candidate_brier.shape != weight.shape:
+        raise ValueError("candidate, reference, and weights must have the same length")
+    if candidate_brier.size == 0:
+        raise ValueError("need at least one game")
+    if resamples < 1:
+        raise ValueError("resamples must be at least 1")
+    if (
+        not np.all(np.isfinite(candidate_brier))
+        or not np.all(np.isfinite(reference_brier))
+        or not np.all(np.isfinite(weight))
+    ):
+        raise ValueError("brier scores and weights must be finite")
+    if np.any(weight <= 0.0):
+        raise ValueError("weights must be positive")
+
+    delta = candidate_brier - reference_brier
+    point = float(np.sum(weight * delta) / np.sum(weight))
+    stats = _resampled_means(delta, weight, resamples=resamples, seed=seed)
+    lower, upper = np.percentile(stats, [2.5, 97.5], method="linear")
+    return GameBrierInterval(point=point, lower=float(lower), upper=float(upper))
+
+
+def reference_cleared(interval: GameBrierInterval) -> bool:
+    """True when the interval's upper end is strictly below zero."""
+    return interval.upper < 0.0
+
+
+def _resampled_means(
+    delta: NDArray[np.float64],
+    weight: NDArray[np.float64],
+    *,
+    resamples: int,
+    seed: int,
+) -> NDArray[np.float64]:
+    rng = np.random.default_rng(seed)
+    count = int(delta.size)
+    stats = np.empty(resamples, dtype=np.float64)
+    batch = 512
+    start = 0
+    while start < resamples:
+        stop = min(start + batch, resamples)
+        drawn = rng.integers(0, count, size=(stop - start, count))
+        drawn_weight = weight[drawn]
+        stats[start:stop] = np.sum(delta[drawn] * drawn_weight, axis=1) / np.sum(
+            drawn_weight, axis=1
+        )
+        start = stop
+    return stats
 
 
 def format_report(report: CalibrationReport, name: str = "model") -> str:
