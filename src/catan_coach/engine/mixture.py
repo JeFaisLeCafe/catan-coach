@@ -103,11 +103,14 @@ def materialize_mixture(paths: Sequence[Path | str], work: Path) -> Materialized
 
 
 def _corpus_files(paths: Sequence[Path | str]) -> list[tuple[int, Path]]:
+    from catan_coach.engine.corpus import require_trainable_corpus
+
     files: list[tuple[int, Path]] = []
     for corpus_index, path in enumerate(paths):
         games = sorted((Path(path) / _GAMES).glob("*.parquet"))
         if not games:
             raise ValueError(f"no Corpus games in {path}")
+        require_trainable_corpus(path)
         files.extend((corpus_index, game) for game in games)
     return files
 
