@@ -1,8 +1,9 @@
 # Strategy Lab experiments
 
 The harness can run a preregistered plan, resume it, and write a Strength Report.
-The two full experiments are specified and not yet run. A partial sample would not
-answer them, so this directory does not contain a result.
+The generation-7 audit is complete: [report and reproduction](./generation-7-vs-value/README.md).
+Generation 7 won 12 of 2,000 games against three `ValueFunctionPlayer` opponents and loses under
+the preregistered rule. The settlement/city experiment remains unrun.
 
 ## Generation 7 versus ValueFunctionPlayer
 

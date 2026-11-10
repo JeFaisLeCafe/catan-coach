@@ -47,3 +47,10 @@ uv run catan-coach calibrate \
 
 The command fits the map on one deterministic half of the validation games and prints metrics
 from the untouched half. It exits nonzero and leaves the output unchanged if any Brier bar fails.
+
+## Playing strength
+
+The [generation-7 strength audit](./experiments/generation-7-vs-value/README.md) found 12 wins
+in 2,000 games against three `ValueFunctionPlayer` opponents with four search simulations and
+exploration disabled. Generation 7 loses under that preregistered plan. Held-out Calibration
+does not establish strong play; Policy improvement is required before generating more self-play.
