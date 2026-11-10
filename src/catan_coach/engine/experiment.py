@@ -28,6 +28,7 @@ from catan_coach.domain.probability_map import ProbabilityMap
 from catan_coach.engine.behavior import BehaviorTracker
 from catan_coach.engine.board import corpus_map
 from catan_coach.engine.model_player import WinProbabilityPlayer
+from catan_coach.engine.position import action_label
 from catan_coach.engine.preferences import selection_delta
 from catan_coach.engine.trades import install_trade_replies
 from catan_coach.models.gbdt import GbdtModel
@@ -71,7 +72,10 @@ def play_scheduled_game(scheduled: ScheduledGame) -> CompletedGame | DroppedGame
     plies = 0
     while game.winning_color() is None and game.state.num_turns < scheduled.rules.turn_limit:
         initial_build = game.state.is_initial_build_phase
-        action = game.state.current_player().decide(game, game.playable_actions)
+        # ValueFunctionPlayer breaks ties using the first legal Action.
+        # Catanatron's set-backed choices otherwise depend on process hashes.
+        actions = sorted(game.playable_actions, key=action_label)
+        action = game.state.current_player().decide(game, actions)
         record = game.execute(action)
         tracker.observe(initial_build, action, record, game)
         plies += 1

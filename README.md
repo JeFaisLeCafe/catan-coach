@@ -65,9 +65,10 @@ Catan Coach is a working local coaching app. It can:
 
 The Strategy Lab compares a named Policy with an Opponent Population and reports seat-balanced
 win rates, uncertainty, and descriptive behavior. A small example plan is
-[`docs/examples/strategy-lab.json`](./docs/examples/strategy-lab.json). The preregistered
-generation-7 audit and the settlement/city intervention are specified in
-[`docs/experiments/README.md`](./docs/experiments/README.md) and have not been run.
+[`docs/examples/strategy-lab.json`](./docs/examples/strategy-lab.json). The completed
+[generation-7 audit](./docs/experiments/generation-7-vs-value/README.md) found 12 wins in 2,000
+games against three `ValueFunctionPlayer` opponents. The settlement/city intervention is specified
+in [`docs/experiments/README.md`](./docs/experiments/README.md) and remains unrun.
 
 ```bash
 uv run catan-coach lab run docs/examples/strategy-lab.json --out data/experiments/smoke

@@ -5,7 +5,7 @@ answers whether generation 7 with search beats Catanatron's `ValueFunctionPlayer
 
 **Blocked by:** 06
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Read first
 
@@ -119,3 +119,16 @@ written and how to regenerate them.
 
 End with the exact evidence-backed sentence Catan Coach may now claim, or state plainly that the
 planned experiment was not completed. Include artifact hashes and the source commit.
+
+## Completed audit — 2026-11-10
+
+Source: `26378264ba6681fa675bf14765f03c0d020af92c` (clean).
+[Artifacts, hashes, environment, and reproduction](../../../docs/experiments/generation-7-vs-value/README.md).
+2,000 completed, 500 per Seat, no drops or technical failures; eight workers, 618 seconds.
+Independent seed/Seat/identity/denominator/Wilson checks and identical report regeneration passed.
+Python: 179 fast tests and 282 full tests; frontend: 97 tests and production build; Ruff and mypy clean.
+
+Catan Coach may now claim: generation 7 with four search simulations and exploration disabled
+won 12 of 2,000 games (0.60%, 95% Wilson 0.3436%–1.0458%) against three Catanatron
+`ValueFunctionPlayer` opponents on seeds 20000–21999; it loses under the preregistered rule.
+The installed model is unchanged. Issue 10 records the required Policy-improvement follow-up.
