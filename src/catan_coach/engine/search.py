@@ -34,7 +34,9 @@ class _EngineState:
         return str(self._game.state.current_color().name)
 
     def actions(self) -> tuple[str, ...]:
-        return tuple(self._actions)
+        # Engine trade/dev-card choices can come from sets. Seeded sampling
+        # needs the same ordering in every interpreter process.
+        return tuple(sorted(self._actions))
 
     def outcomes(self, action: str) -> tuple[tuple[str, float], ...] | None:
         engine_action = self._actions.get(action)
