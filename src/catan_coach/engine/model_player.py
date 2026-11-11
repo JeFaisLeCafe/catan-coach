@@ -1,4 +1,8 @@
-"""A Seat that plays the Action with the highest Win Probability."""
+"""A Seat that plays the Action with the highest Win Probability.
+
+An initial settlement is the exception: production pips choose it. The
+installed model's opening ranking does not depend on the board.
+"""
 
 from __future__ import annotations
 
@@ -9,9 +13,11 @@ from catanatron.game import Game
 from catanatron.models.enums import Action, ActionPrompt, ActionType
 from catanatron.models.player import Color, Player
 
+from catan_coach.domain.policy import choose_opening_settlement
 from catan_coach.domain.prediction import WinProbabilityModel
 from catan_coach.domain.review import choose_near_tie
 from catan_coach.domain.search import Budget
+from catan_coach.engine.behavior import opening_pips
 from catan_coach.engine.position import action_label
 from catan_coach.engine.scoring import rank_resolved, reply_helps
 from catan_coach.engine.search import refine_position
@@ -27,9 +33,10 @@ PreferenceAdjuster = Callable[[Game, Action], float]
 class WinProbabilityPlayer(Player):  # type: ignore[misc]
     """Chooses by the model. Exact ties break on Action label, matching Analysis.
 
-    Corpus games set `explore` so a near-tie is sampled from the game's own
-    random stream. `search_simulations` looks ahead that many simulations,
-    including on a trade reply. A single legal Action is never searched.
+    Initial settlements are chosen by production pips. Corpus games set
+    `explore` so a near-tie is sampled from the game's own random stream.
+    `search_simulations` looks ahead that many simulations, including on a
+    trade reply. A single legal Action is never searched.
     """
 
     def __init__(
@@ -53,6 +60,9 @@ class WinProbabilityPlayer(Player):  # type: ignore[misc]
         actions = _choices(game, playable_actions)
         if len(actions) == 1:
             return actions[0]
+        opening = _opening_settlement(game, actions)
+        if opening is not None:
+            return opening
         if self._search_simulations > 0:
             probabilities = _search_probabilities(game, self._model, self._search_simulations)
             return _choose(
@@ -65,6 +75,20 @@ class WinProbabilityPlayer(Player):  # type: ignore[misc]
         return _choose(
             actions, probabilities, game, explore=self._explore, adjust=self._preferences
         )
+
+
+def _opening_settlement(game: Game, actions: list[Action]) -> Action | None:
+    if not game.state.is_initial_build_phase:
+        return None
+    if not actions or any(action.action_type != ActionType.BUILD_SETTLEMENT for action in actions):
+        return None
+    label = choose_opening_settlement(
+        (action_label(action), opening_pips(game, int(action.value))) for action in actions
+    )
+    for action in actions:
+        if action_label(action) == label:
+            return action
+    raise ValueError(f"opening settlement {label} is not playable")
 
 
 def _choices(game: Game, playable_actions: list[Action]) -> list[Action]:

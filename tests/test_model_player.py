@@ -1,4 +1,7 @@
-"""The model chooses a legal Action, the same one Analysis ranks first."""
+"""The model chooses a legal Action, the same one Analysis ranks first.
+
+Initial settlements are chosen by production pips instead.
+"""
 
 from __future__ import annotations
 
@@ -18,14 +21,51 @@ from catan_coach.engine.position import EnginePosition, action_label  # noqa: E4
 from catan_coach.models.baselines import VictoryPointShareModel  # noqa: E402
 
 
-def test_opening_choice_matches_the_analysis() -> None:
+def test_opening_settlement_follows_production_even_when_search_is_on(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from catanatron.models.enums import ActionType
+
+    from catan_coach.engine.behavior import opening_pips
+
+    colors = [Color.RED, Color.BLUE, Color.WHITE, Color.ORANGE]
+    game = Game([SimplePlayer(color) for color in colors], seed=1)
+    settlements = [
+        action
+        for action in game.playable_actions
+        if action.action_type == ActionType.BUILD_SETTLEMENT
+    ]
+
+    def unused(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("opening settlement must not consult the model")
+
+    monkeypatch.setattr("catan_coach.engine.model_player.refine_position", unused)
+    monkeypatch.setattr("catan_coach.engine.model_player.rank_resolved", unused)
+    chosen = WinProbabilityPlayer(
+        game.state.current_color(),
+        VictoryPointShareModel(public_vp_indices(4)),
+        search_simulations=4,
+    ).decide(game, game.playable_actions)
+
+    assert chosen in settlements
+    assert opening_pips(game, int(chosen.value)) == max(
+        opening_pips(game, int(action.value)) for action in settlements
+    )
+
+
+def test_initial_road_still_matches_the_analysis() -> None:
+    from catanatron.models.enums import ActionType
+
     colors = [Color.RED, Color.BLUE, Color.WHITE, Color.ORANGE]
     game = Game([SimplePlayer(color) for color in colors], seed=1)
     model = VictoryPointShareModel(public_vp_indices(4))
-    seat = game.state.current_color()
-    chosen = WinProbabilityPlayer(seat, model).decide(game, game.playable_actions)
+    player = WinProbabilityPlayer(game.state.current_color(), model)
+    settlement = player.decide(game, game.playable_actions)
+    assert settlement.action_type == ActionType.BUILD_SETTLEMENT
+    game.execute(settlement)
 
-    assert chosen in game.playable_actions
+    chosen = player.decide(game, game.playable_actions)
+    assert chosen.action_type == ActionType.BUILD_ROAD
     assert action_label(chosen) == analyze(EnginePosition(game), model).ranked[0].action.label
 
 
@@ -108,6 +148,7 @@ def test_a_trade_reply_uses_the_fixed_search(monkeypatch: pytest.MonkeyPatch) ->
 
     colors = [Color.RED, Color.BLUE, Color.WHITE, Color.ORANGE]
     game = Game([SimplePlayer(color) for color in colors], seed=1)
+    game.state.is_initial_build_phase = False
     game.state.current_prompt = ActionPrompt.DECIDE_TRADE
     seen: dict[str, object] = {}
 
