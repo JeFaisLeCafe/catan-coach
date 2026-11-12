@@ -1,0 +1,297 @@
+{
+  "attrition_as_losses": {
+    "count": 2000,
+    "lower": 0.05270713160648804,
+    "rate": 0.0625,
+    "successes": 125,
+    "upper": 0.07397028476460826
+  },
+  "attrition_as_wins": {
+    "count": 2000,
+    "lower": 0.05270713160648804,
+    "rate": 0.0625,
+    "successes": 125,
+    "upper": 0.07397028476460826
+  },
+  "base_seed": 50000,
+  "candidate": {
+    "explore": false,
+    "kind": "model",
+    "model_hash": "4ff465c8dcb55bdb08e78225b9ac1cd45d6b4ffc129eef00605b369c619e9222",
+    "name": "value-table-candidate",
+    "preferences": [],
+    "search_simulations": 4,
+    "sidecar_hash": "fe0aa483c148d162845acb69fe7a254500e5b33e7a5310da60359a1dbc205aa2"
+  },
+  "candidate_losses": {
+    "acceptances": 0.0,
+    "actual_victory_points": 4.740266666666667,
+    "adjacent_port_rate": 0.03573333333333333,
+    "cities": 1.2986666666666666,
+    "completed_trades": 8.3088,
+    "development_cards": 0.1856,
+    "first_build": [
+      [
+        "city",
+        10
+      ],
+      [
+        "road",
+        1865
+      ]
+    ],
+    "games": 1875,
+    "initial_pips": 21.857066666666668,
+    "initial_resources": 3.5232,
+    "knights": 0.04533333333333334,
+    "largest_army_rate": 0.0016,
+    "longest_road_rate": 0.08693333333333333,
+    "maritime_trades": 3.4021333333333335,
+    "offers": 10.653866666666667,
+    "public_victory_points": 4.6416,
+    "roads": 5.8128,
+    "settlements": 1.1658666666666666
+  },
+  "candidate_victory_point_mean": 5.0705,
+  "candidate_victory_points": [
+    [
+      2,
+      230
+    ],
+    [
+      3,
+      358
+    ],
+    [
+      4,
+      348
+    ],
+    [
+      5,
+      282
+    ],
+    [
+      6,
+      330
+    ],
+    [
+      7,
+      124
+    ],
+    [
+      8,
+      123
+    ],
+    [
+      9,
+      80
+    ],
+    [
+      10,
+      122
+    ],
+    [
+      11,
+      3
+    ]
+  ],
+  "candidate_wins": {
+    "acceptances": 0.0,
+    "actual_victory_points": 10.024,
+    "adjacent_port_rate": 0.04,
+    "cities": 3.36,
+    "completed_trades": 9.816,
+    "development_cards": 0.304,
+    "first_build": [
+      [
+        "road",
+        125
+      ]
+    ],
+    "games": 125,
+    "initial_pips": 21.88,
+    "initial_resources": 4.008,
+    "knights": 0.0,
+    "largest_army_rate": 0.0,
+    "longest_road_rate": 0.912,
+    "maritime_trades": 4.832,
+    "offers": 12.264,
+    "public_victory_points": 9.76,
+    "roads": 8.264,
+    "settlements": 2.576
+  },
+  "completed": 2000,
+  "discard_limit": 7,
+  "dropped": 0,
+  "friendly_robber": false,
+  "games_per_candidate_seat": 500,
+  "map_policy": "corpus",
+  "missing": 0,
+  "opponent": {
+    "explore": false,
+    "kind": "value",
+    "model_hash": null,
+    "name": "ValueFunctionPlayer",
+    "preferences": [],
+    "search_simulations": 0,
+    "sidecar_hash": null
+  },
+  "opponent_victory_point_mean": 7.1195,
+  "opponent_victory_points": [
+    [
+      2,
+      123
+    ],
+    [
+      3,
+      378
+    ],
+    [
+      4,
+      646
+    ],
+    [
+      5,
+      806
+    ],
+    [
+      6,
+      647
+    ],
+    [
+      7,
+      665
+    ],
+    [
+      8,
+      415
+    ],
+    [
+      9,
+      445
+    ],
+    [
+      10,
+      1764
+    ],
+    [
+      11,
+      111
+    ]
+  ],
+  "opponents": {
+    "acceptances": 5.958166666666667,
+    "actual_victory_points": 7.1195,
+    "adjacent_port_rate": 0.0745,
+    "cities": 1.8486666666666667,
+    "completed_trades": 0.0,
+    "development_cards": 0.6401666666666667,
+    "first_build": [
+      [
+        "city",
+        793
+      ],
+      [
+        "development_card",
+        337
+      ],
+      [
+        "none",
+        3
+      ],
+      [
+        "road",
+        4867
+      ]
+    ],
+    "games": 6000,
+    "initial_pips": 19.831,
+    "initial_resources": 4.717666666666666,
+    "knights": 0.32716666666666666,
+    "largest_army_rate": 0.015333333333333332,
+    "longest_road_rate": 0.28683333333333333,
+    "maritime_trades": 6.464,
+    "offers": 0.0,
+    "public_victory_points": 6.997833333333333,
+    "roads": 7.0565,
+    "settlements": 2.5448333333333335
+  },
+  "plan_name": "value-table-candidate-vs-value",
+  "scheduled": 2000,
+  "seats": [
+    {
+      "completed": 500,
+      "dropped": 0,
+      "missing": 0,
+      "proportion": {
+        "count": 500,
+        "lower": 0.06101908946846894,
+        "rate": 0.082,
+        "successes": 41,
+        "upper": 0.10935485915738875
+      },
+      "seat": 0,
+      "terminal_failures": 0,
+      "wins": 41
+    },
+    {
+      "completed": 500,
+      "dropped": 0,
+      "missing": 0,
+      "proportion": {
+        "count": 500,
+        "lower": 0.035730265115705276,
+        "rate": 0.052,
+        "successes": 26,
+        "upper": 0.07510114393784553
+      },
+      "seat": 1,
+      "terminal_failures": 0,
+      "wins": 26
+    },
+    {
+      "completed": 500,
+      "dropped": 0,
+      "missing": 0,
+      "proportion": {
+        "count": 500,
+        "lower": 0.05758139347616159,
+        "rate": 0.078,
+        "successes": 39,
+        "upper": 0.10485354987338852
+      },
+      "seat": 2,
+      "terminal_failures": 0,
+      "wins": 39
+    },
+    {
+      "completed": 500,
+      "dropped": 0,
+      "missing": 0,
+      "proportion": {
+        "count": 500,
+        "lower": 0.024460118055830385,
+        "rate": 0.038,
+        "successes": 19,
+        "upper": 0.05858477253064388
+      },
+      "seat": 3,
+      "terminal_failures": 0,
+      "wins": 19
+    }
+  ],
+  "source_commit": "34caf46153a1f58928cfc8b19c75fb26698bc47f",
+  "source_dirty": false,
+  "terminal_failures": 0,
+  "turn_limit": 1000,
+  "valid": true,
+  "vps_to_win": 10,
+  "warnings": [],
+  "wins": {
+    "count": 2000,
+    "lower": 0.05270713160648804,
+    "rate": 0.0625,
+    "successes": 125,
+    "upper": 0.07397028476460826
+  }
+}

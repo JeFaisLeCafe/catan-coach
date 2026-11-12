@@ -55,5 +55,6 @@ exploration disabled. Generation 7 loses under that preregistered plan. The open
 then won 65 of 2,000 on different seeds and loses under the same rule. Held-out Calibration
 does not establish strong play. The value-table model learned from those value-function games, as specified in
 [issue 11](../.scratch/strategy-lab/issues/11-learn-from-value-function-games.md), rather than
-from another self-play Corpus of this Policy. Its preregistered strength run is on seeds
-50000–51999.
+from another self-play Corpus of this Policy. In its preregistered
+[strength run](./experiments/value-table-candidate/README.md) it won 125 of 2,000 games on seeds
+50000–51999 and still loses under that rule.

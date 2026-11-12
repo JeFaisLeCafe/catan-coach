@@ -1,6 +1,6 @@
 # 11 — Learn Win Probability from the value-function games
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **Blocked by:** 10 (resolved)
 
@@ -93,3 +93,32 @@ Frozen before any training metric or win count from the candidate is inspected. 
 Changing features, removing the pip rule, behavior-cloning `ValueFunctionPlayer`, training on the
 generation-7 audit seeds, running the settlement/city sweep, or installing the candidate because
 it won games.
+
+## Comments
+
+Completed 2026-11-12. [Artifacts and reproduction](../../../docs/experiments/value-table-candidate/README.md).
+
+Corpus. The stored opening-production directory matched the published raw SHA-256 before use.
+`catan-coach corpus --replay` (commit `0a9ed6c`) replayed seeds 40000–41999 with the scheduled-game
+runner. Every game matched its stored winner, candidate Seat, Plies, and Turns before its rows were
+written; none mismatched or dropped. The manifest is `player_kind: mixed`, generation-7 hash,
+search 4, exploration false, opponent `value`, base seed 40000, 2,000 games; a self-play claim
+for it is refused by the manifest and by resume binding. 251,628 rows, 1,576 train and 424
+validation games, candidate losses kept as losses.
+
+Calibration. Unchanged recipe, train split only. On 223 report games the game-level 95% Brier
+intervals were all below zero: constant −0.0593 [−0.0666, −0.0519], vp-share −0.0152
+[−0.0189, −0.0113], generation 7 −0.0170 [−0.0227, −0.0113]. The candidate was installed
+(commit `34caf46`). Trees and map are in `data/value-table-candidate/`.
+
+Strength. Pilot 52000–52003: 4/4 in 4 s, outcomes not read. Preregistered run at clean
+`34caf46`: 125 of 2,000 wins (6.25%, 95% Wilson 5.2707%–7.3970%), no attrition. Decision:
+**loses**. Seats 41, 26, 39, 19. Post-setup settlements in losses rose to 1.17 from the previous
+Policy's 0.20; this is descriptive and the seeds differ from issue 10's. All issue-08 checks,
+byte-identical report regeneration, and a fresh-process hash-seed-1 replay of the first block
+passed. No self-play generation was trained.
+
+Catan Coach may now claim: the value-table model with production-pip openings, four search
+simulations, and exploration disabled won 125 of 2,000 games (6.25%, 95% Wilson 5.2707%–7.3970%)
+against three Catanatron `ValueFunctionPlayer` opponents on seeds 50000–51999; it loses under
+the preregistered rule.
