@@ -1,0 +1,50 @@
+{
+  "artifact_sha256": {
+    "plan.json": "907f394fe660b8ffd7a5bf39a6b4e1e4bca9a5f3e45890226f7512706c01b59a",
+    "report.json": "e0e94e9c5892725cf5acbbbf9c599498f626fa78ac07b43116a281ae755e4a5b",
+    "report.md": "dbada0c5f072c051516746fb9c12f0acd4ebf4030bac3b2db5c0a922271759b3"
+  },
+  "decision": "loses",
+  "elapsed_seconds": 697,
+  "engine_sha": "ecf931181b9a65bb4116a2153fb78c16f1438e00",
+  "environment": {
+    "catanatron": "3.3.0",
+    "lightgbm": "4.7.0",
+    "numpy": "2.4.6",
+    "platform": "macOS-14.6.1-arm64-arm-64bit",
+    "python": "3.11.6"
+  },
+  "frozen_plan_sha256": "97b560ddab358a344bf355222d4482d532127beb30fd963adfbe799fb977b6a4",
+  "model_sha256": "19e0f6641297f3cb37932d1d230153f8e037bb01c915bfeb92a5203da7c1a885",
+  "python_hash_seed": "0",
+  "raw_directory": "data/experiments/generation-7-opening-production",
+  "raw_hash_algorithm": "SHA-256 of sorted relative paths, each followed by NUL and file bytes; plan.json, games/*.json and failures/**/*.json",
+  "raw_sha256": "7f4420ae9fab52bd4bab67e022bd6d5dac3a9cb02566dde63e5951cf636d93fb",
+  "run_command": "PYTHONHASHSEED=0 uv run catan-coach lab run .scratch/strategy-lab/plans/10-opening-production.json --out data/experiments/generation-7-opening-production --workers 8",
+  "scheduled_per_seat": [
+    500,
+    500,
+    500,
+    500
+  ],
+  "schema": 1,
+  "seed_range": [
+    40000,
+    41999
+  ],
+  "sidecar_sha256": "4c8d5d9aba6a067adebfed9ec5c56f82c9213c671db49460cd3c360b61c0c5e7",
+  "source_commit": "38b05bea0e560c56e340a208b7d50dce59e4b9a1",
+  "source_dirty": false,
+  "verification": [
+    "2000 unique seeds in range",
+    "500 scheduled games per Seat",
+    "each four-game block contains all Seats",
+    "all result Policy identities match schedule",
+    "all source commits and engine pins match",
+    "model and sidecar hashes match",
+    "winner and Seat denominators independently counted",
+    "reports regenerated identically",
+    "four complete game documents from the first scheduling block replayed identically in a fresh process with hash seed 1 versus the original eight-worker run with hash seed 0"
+  ],
+  "workers": 8
+}

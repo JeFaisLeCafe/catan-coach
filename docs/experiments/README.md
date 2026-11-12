@@ -3,7 +3,11 @@
 The harness can run a preregistered plan, resume it, and write a Strength Report.
 The generation-7 audit is complete: [report and reproduction](./generation-7-vs-value/README.md).
 Generation 7 won 12 of 2,000 games against three `ValueFunctionPlayer` opponents and loses under
-the preregistered rule. The settlement/city experiment remains unrun.
+the preregistered rule. The opening-production follow-up is also complete:
+[report and reproduction](./generation-7-opening-production/README.md). That Policy won 65 of
+2,000 games on seeds 40000–41999 and loses under the same rule. The two win counts use different
+seeds, so their difference is not a paired estimate of the opening rule. The settlement/city
+experiment remains unrun.
 
 ## Generation 7 versus ValueFunctionPlayer
 
@@ -43,5 +47,17 @@ Plan: [`.scratch/strategy-lab/plans/10-opening-production.json`](../../.scratch/
 
 The candidate is generation 7 with four search simulations. Initial settlements are chosen by
 production pips; the rest of play is unchanged. Seeds `40000–41999`, same opponent and decision
-rule as the generation-7 audit. This comparison is preregistered and has not been run. The rules
-are in [issue 10](../../.scratch/strategy-lab/issues/10-improve-policy-after-strength-audit.md).
+rule as the generation-7 audit. The run is published in
+[generation-7-opening-production](./generation-7-opening-production/README.md). The rules are in
+[issue 10](../../.scratch/strategy-lab/issues/10-improve-policy-after-strength-audit.md).
+
+```bash
+uv run catan-coach lab run .scratch/strategy-lab/plans/10-opening-production.json \
+  --out data/experiments/generation-7-opening-production
+uv run catan-coach lab report data/experiments/generation-7-opening-production \
+  --json docs/experiments/generation-7-opening-production/report.json \
+  --markdown docs/experiments/generation-7-opening-production/report.md
+```
+
+Run this only from a clean tree at the source commit recorded in the report. Do not stop early
+or change the model from the result. Model adoption stays on the calibration harness.

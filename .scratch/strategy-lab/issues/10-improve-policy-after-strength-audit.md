@@ -1,6 +1,6 @@
 # 10 — Improve the Policy after the generation-7 strength audit
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **Blocked by:** 08 (completed)
 
@@ -86,3 +86,29 @@ the opponents' 19.85. Distinct resources stayed behind: 3.63 versus 4.68. Adjace
 rare: 8/200 versus 47/600. Whether the pip rule changes game wins, and whether the remaining
 resource gap matters, is what the preregistered run is for. Post-setup expansion was not
 re-measured.
+
+## Completed comparison — 2026-11-12
+
+Source: `38b05bea0e560c56e340a208b7d50dce59e4b9a1` (clean).
+[Artifacts, hashes, environment, and reproduction](../../../docs/experiments/generation-7-opening-production/README.md).
+2,000 completed, 500 per Seat, no drops or technical failures; eight workers, 697 seconds.
+Independent seed, Seat, identity, denominator, and Wilson checks passed. Report regeneration was
+byte-identical. The first scheduling block replayed identically in a fresh process with hash
+seed 1.
+
+The changed Policy won 65 of 2,000 games (3.25%, 95% Wilson 2.5581%–4.1212%). The decision is
+**loses**: the completed-game upper bound and the attrition-as-wins upper bound are both below
+25%. Seat wins were 18, 18, 15, and 14, reported only as diagnostics.
+
+In the 1,935 losses, opening pips were 21.90 against the opponents' 19.81, distinct resources
+were 3.52 against 4.72, adjacent ports occurred in 4.65% of games against 7.57% of opponent
+Seats, and post-setup settlements were 0.20 against 2.66. The 65 wins had 21.89 pips and 4.38
+distinct resources. These profiles are descriptive. Seeds 40000–41999 differ from the
+generation-7 audit's 20000–21999, so 65 versus 12 is not a paired estimate of the opening rule.
+The cause of the remaining losses stays unknown. The installed model is unchanged. No generation-8
+Corpus was generated.
+
+Catan Coach may now claim: generation 7 with four search simulations, exploration disabled, and
+initial settlements chosen by production pips won 65 of 2,000 games (3.25%, 95% Wilson
+2.5581%–4.1212%) against three Catanatron `ValueFunctionPlayer` opponents on seeds 40000–41999;
+it loses under the preregistered rule.
