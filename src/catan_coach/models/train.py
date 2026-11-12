@@ -70,7 +70,12 @@ class BaselineComparison:
     priors: tuple[PriorComparison, ...] = ()
 
 
-def train(corpus: Corpus, *, seed: int = 0) -> GbdtModel:
+def train(
+    corpus: Corpus,
+    *,
+    seed: int = 0,
+    masked_columns: Sequence[int] = (),
+) -> GbdtModel:
     mask = corpus.splits == TRAIN
     if not np.any(mask):
         raise ValueError("Corpus has no train games")
@@ -78,22 +83,43 @@ def train(corpus: Corpus, *, seed: int = 0) -> GbdtModel:
         np.asarray(corpus.observations[mask], dtype=np.float64),
         np.asarray(corpus.won[mask], dtype=np.float64),
         seed=seed,
+        masked_columns=masked_columns,
     )
 
 
 def train_matrix(
-    features: np.ndarray, won: np.ndarray, *, seed: int = 0, name: str = "gbdt"
+    features: np.ndarray,
+    won: np.ndarray,
+    *,
+    seed: int = 0,
+    name: str = "gbdt",
+    masked_columns: Sequence[int] = (),
 ) -> GbdtModel:
     if features.shape[0] == 0:
         raise ValueError("Corpus has no train games")
+    training_features = features
+    if len(masked_columns) > 0:
+        training_features = _mask_columns(features, masked_columns)
     params = dict(_PARAMS)
     params["seed"] = seed
     booster = lgb.train(
         params,
-        lgb.Dataset(features, label=won, free_raw_data=True),
+        lgb.Dataset(training_features, label=won, free_raw_data=True),
         num_boost_round=_NUM_BOOST_ROUND,
     )
     return GbdtModel(booster, name=name)
+
+
+def _mask_columns(features: np.ndarray, masked_columns: Sequence[int]) -> np.ndarray:
+    """Zero columns on a float32 copy so trees never split on them."""
+    n_columns = int(features.shape[1])
+    columns = tuple(int(column) for column in masked_columns)
+    for column in columns:
+        if column < 0 or column >= n_columns:
+            raise ValueError(f"masked column {column} is outside the {n_columns} training columns")
+    masked = np.array(features, dtype=np.float32, copy=True)
+    masked[:, columns] = np.float32(0.0)
+    return masked
 
 
 def compare_to_baselines(

@@ -33,6 +33,10 @@ class GbdtModel:
         return self._name
 
     @property
+    def width(self) -> int:
+        return int(self._booster.num_feature())
+
+    @property
     def probability_map(self) -> ProbabilityMap | None:
         return self._probability_map
 
@@ -48,25 +52,42 @@ class GbdtModel:
         return GbdtModel(self._booster, name=self._name, feature_names=self._feature_names)
 
     def predict(self, features: FeatureMatrix) -> Probabilities:
-        matrix = np.asarray(features, dtype=np.float64)
-        if matrix.ndim != 2:
-            raise ValueError(f"expected a 2-D feature matrix, got shape {matrix.shape}")
+        matrix = self._aligned(features)
         predicted = np.clip(np.asarray(self._booster.predict(matrix), dtype=np.float64), 0.0, 1.0)
         if self._probability_map is None:
             return predicted
         return self._probability_map.apply(predicted)
 
     def explain(self, features: FeatureMatrix) -> tuple[tuple[Contribution, ...], ...]:
-        matrix = np.asarray(features, dtype=np.float64)
-        if matrix.ndim != 2:
-            raise ValueError(f"expected a 2-D feature matrix, got shape {matrix.shape}")
+        matrix = self._aligned(features)
         if self._feature_names is None:
             return tuple(() for _ in range(matrix.shape[0]))
         raw = np.asarray(self._booster.predict(matrix, pred_contrib=True), dtype=np.float64)
         names = self._feature_names
+        if len(names) > matrix.shape[1]:
+            names = names[: matrix.shape[1]]
         if raw.shape[1] - 1 != len(names):
             raise ValueError("Observation names do not match the trained model")
         return tuple(top_contributions(row[:-1], names) for row in raw)
+
+    def _aligned(self, features: FeatureMatrix) -> np.ndarray:
+        """Keep the prefix this booster was trained on.
+
+        Observation columns are appended, so a wider matrix is still scored
+        by an older model. A narrower matrix cannot be.
+        """
+        matrix = np.asarray(features, dtype=np.float64)
+        if matrix.ndim != 2:
+            raise ValueError(f"expected a 2-D feature matrix, got shape {matrix.shape}")
+        trained = self.width
+        columns = int(matrix.shape[1])
+        if columns < trained:
+            raise ValueError(
+                f"feature matrix has {columns} columns but the model expects {trained}"
+            )
+        if columns > trained:
+            return matrix[:, :trained]
+        return matrix
 
     def save(self, path: Path | str) -> None:
         dest = Path(path)
