@@ -1,0 +1,43 @@
+Map fit on 201 validation games. Report is the other 223, which the map did not see.
+Corpus: data/corpora/value-table  games: 223
+constant(1/4): n=26532  brier=0.1875  logloss=0.5623  ece=0.0000
+        band         n  predicted   actual      gap
+  [0.2,0.3)     26532      0.250    0.250   +0.000
+vp-share(T=2.0): n=26532  brier=0.1434  logloss=0.4456  ece=0.0474
+        band         n  predicted   actual      gap
+  [0.0,0.1)      3960      0.064    0.009   -0.055
+  [0.1,0.2)      6564      0.152    0.101   -0.052
+  [0.2,0.3)      9052      0.243    0.235   -0.008
+  [0.3,0.4)      3247      0.339    0.386   +0.046
+  [0.4,0.5)      1391      0.445    0.541   +0.097
+  [0.5,0.6)      1106      0.552    0.669   +0.118
+  [0.6,0.7)       698      0.652    0.834   +0.182
+  [0.7,0.8)       373      0.748    0.917   +0.169
+  [0.8,0.9)       141      0.833    1.000   +0.167
+candidate: n=26532  brier=0.1282  logloss=0.3994  ece=0.0126
+brier difference, candidate minus constant(1/4): -0.0593  95% [-0.0666, -0.0519]
+brier difference, candidate minus vp-share(T=2.0): -0.0152  95% [-0.0189, -0.0113]
+brier difference, candidate minus installed: -0.0170  95% [-0.0227, -0.0113]
+        band         n  predicted   actual      gap
+  [0.0,0.1)      8781      0.028    0.030   +0.002
+  [0.1,0.2)      5128      0.155    0.150   -0.005
+  [0.2,0.3)      4147      0.241    0.244   +0.003
+  [0.3,0.4)      3277      0.323    0.331   +0.008
+  [0.4,0.5)       977      0.448    0.461   +0.013
+  [0.5,0.6)      1889      0.562    0.572   +0.010
+  [0.6,0.7)      1066      0.646    0.765   +0.119
+  [0.7,0.8)       419      0.733    0.881   +0.147
+  [0.8,0.9)       388      0.857    0.920   +0.064
+  [0.9,1.0)       460      0.954    0.937   -0.017
+
+Discrimination: Brier skill vs constant(1/4) = +0.316
+Discrimination: Brier skill vs vp-share(T=2.0) = +0.106
+
+candidate beats constant(1/4) on Brier skill
+candidate beats vp-share(T=2.0) on Brier skill
+candidate beats vp-share(T=2.0) on Calibration error
+
+Discrimination: Brier skill vs installed = +0.117
+candidate beats installed on Brier skill
+candidate beats installed on Calibration error
+Installed model.txt

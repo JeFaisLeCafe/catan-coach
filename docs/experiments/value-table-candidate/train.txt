@@ -1,0 +1,39 @@
+Wrote data/value-table-candidate/model.txt
+Corpus: data/corpora/value-table  games: 2000
+constant(1/4): n=52268  brier=0.1875  logloss=0.5623  ece=0.0000
+        band         n  predicted   actual      gap
+  [0.2,0.3)     52268      0.250    0.250   +0.000
+vp-share(T=2.0): n=52268  brier=0.1461  logloss=0.4524  ece=0.0431
+        band         n  predicted   actual      gap
+  [0.0,0.1)      7368      0.065    0.009   -0.056
+  [0.1,0.2)     13369      0.152    0.105   -0.047
+  [0.2,0.3)     17864      0.244    0.239   -0.005
+  [0.3,0.4)      6375      0.339    0.381   +0.042
+  [0.4,0.5)      2873      0.445    0.533   +0.088
+  [0.5,0.6)      2221      0.549    0.646   +0.097
+  [0.6,0.7)      1324      0.651    0.832   +0.181
+  [0.7,0.8)       666      0.748    0.934   +0.186
+  [0.8,0.9)       207      0.830    0.981   +0.151
+  [0.9,1.0)         1      0.901    1.000   +0.099
+gbdt: n=52268  brier=0.1355  logloss=0.4232  ece=0.0392
+        band         n  predicted   actual      gap
+  [0.0,0.1)     11405      0.063    0.016   -0.047
+  [0.1,0.2)     13030      0.148    0.112   -0.036
+  [0.2,0.3)     13922      0.245    0.250   +0.006
+  [0.3,0.4)      5160      0.346    0.380   +0.034
+  [0.4,0.5)      2968      0.445    0.530   +0.085
+  [0.5,0.6)      1903      0.548    0.635   +0.086
+  [0.6,0.7)      1488      0.650    0.735   +0.084
+  [0.7,0.8)      1607      0.751    0.848   +0.097
+  [0.8,0.9)       785      0.830    0.944   +0.114
+
+Discrimination: Brier skill vs constant(1/4) = +0.277
+Discrimination: Brier skill vs vp-share(T=2.0) = +0.072
+
+gbdt beats constant(1/4) on Brier skill
+gbdt beats vp-share(T=2.0) on Brier skill
+gbdt beats vp-share(T=2.0) on Calibration error
+
+Discrimination: Brier skill vs gbdt = +0.096
+gbdt beats gbdt on Brier skill
+gbdt does not beat gbdt on Calibration error

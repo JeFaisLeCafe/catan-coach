@@ -1,0 +1,42 @@
+{
+  "candidate_loss_rows": 60896,
+  "candidate_rows_by_split": {
+    "train": 49840,
+    "validation": 13067
+  },
+  "candidate_wins": 65,
+  "candidate_wins_by_seat": [
+    18,
+    18,
+    15,
+    14
+  ],
+  "games": 2000,
+  "games_by_split": {
+    "train": 1576,
+    "validation": 424
+  },
+  "manifest": {
+    "base_seed": 40000,
+    "dirty_tree": false,
+    "drop_rate": 0.0,
+    "exploration": false,
+    "games_dropped": 0,
+    "games_finished": 2000,
+    "git_revision": "0a9ed6c22fb25219d02259f9945ea700125c93b4",
+    "max_turns": 1000,
+    "model_sha256": "19e0f6641297f3cb37932d1d230153f8e037bb01c915bfeb92a5203da7c1a885",
+    "opponent": "value",
+    "player_kind": "mixed",
+    "ply_stride": 12,
+    "requested_games": 2000,
+    "search_simulations": 4,
+    "validation_fraction": 0.2
+  },
+  "parquet_sha256": "34e4669a4cd365807e9dc3482c3d7f2e170b4a4a97b3536c2510e20c45a34eb9",
+  "rows": 251628,
+  "rows_by_split": {
+    "train": 199360,
+    "validation": 52268
+  }
+}
