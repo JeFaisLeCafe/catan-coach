@@ -46,6 +46,7 @@ def calibrate_model(
     out: Path | str,
     seed: int = 0,
     prior_paths: Sequence[Path | str] = (),
+    keep_map: bool = False,
 ) -> tuple[BaselineComparison, int, int, bool]:
     """Fit the map for `model_path` and copy it onto `out` only if Brier clears.
 
@@ -55,7 +56,15 @@ def calibrate_model(
     `installed_path`; a CLI flag can forward paths here without any other
     change. Returns the untouched-half report, how many games were fit, how
     many were reported, and whether `out` was replaced.
+
+    `keep_map` also writes the fitted map beside `model_path`, whether or not
+    Brier clears, so a candidate that fails the gate can still be played. It
+    refuses when `model_path` is `out` or the installed model.
     """
+    if keep_map:
+        candidate = Path(model_path).resolve()
+        if candidate in (Path(out).resolve(), Path(installed_path).resolve()):
+            raise ValueError("keeping the map would rewrite the installed model's sidecar")
     trees = GbdtModel.load(model_path, name="candidate").without_probability_map()
     installed = GbdtModel.load(installed_path, name="installed")
     prior_models = tuple(GbdtModel.load(path, name=Path(path).stem) for path in prior_paths)
@@ -81,6 +90,8 @@ def calibrate_model(
         ),
         game_ids=halves.report_game_ids,
     )
+    if keep_map:
+        write_probability_map(model_path, mapping)
     replaced = False
     if clears_adoption(comparison):
         _publish(Path(model_path), Path(out), mapping)

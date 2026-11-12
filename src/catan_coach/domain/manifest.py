@@ -2,6 +2,11 @@
 
 The parquet rows do not record the player. This manifest does. Training and
 calibration refuse a missing manifest, and they refuse a drop rate above 1%.
+
+A `mixed` Corpus is one candidate Seat against an opponent Policy in the
+other Seats, replayed from a stored Strategy Experiment. It is not self-play,
+and a manifest cannot describe it as self-play: model self-play always
+explores, so a `model` manifest with exploration off is refused.
 """
 
 from __future__ import annotations
@@ -11,7 +16,9 @@ import math
 from dataclasses import dataclass, replace
 from typing import Literal
 
-PlayerKind = Literal["value", "model"]
+PlayerKind = Literal["value", "model", "mixed"]
+
+_PLAYER_KINDS = ("value", "model", "mixed")
 
 MANIFEST_NAME = "manifest.json"
 
@@ -34,6 +41,8 @@ _FIELDS = (
     "games_dropped",
     "drop_rate",
 )
+# Only a mixed table names an opponent. Self-play manifests keep their shape.
+_MIXED_FIELDS = (*_FIELDS, "opponent")
 
 _SHA256_HEX = frozenset("0123456789abcdef")
 
@@ -56,14 +65,24 @@ class CorpusManifest:
     games_finished: int
     games_dropped: int
     drop_rate: float
+    opponent: str = ""
 
     def __post_init__(self) -> None:
-        if self.player_kind not in ("value", "model"):
-            raise ValueError("player_kind must be 'value' or 'model'")
+        if self.player_kind not in _PLAYER_KINDS:
+            raise ValueError("player_kind must be 'value', 'model', or 'mixed'")
         if self.player_kind == "value" and self.model_sha256 != "":
             raise ValueError("a value-function Corpus has no model hash")
-        if self.player_kind == "model" and not _is_sha256(self.model_sha256):
+        if self.player_kind != "value" and not _is_sha256(self.model_sha256):
             raise ValueError("a model Corpus needs a sha256 of the model file")
+        if self.player_kind == "mixed":
+            if self.opponent == "":
+                raise ValueError("a mixed table must name its opponent")
+        elif self.opponent != "":
+            raise ValueError("a self-play Corpus has no opponent")
+        if self.player_kind == "model" and not self.exploration:
+            raise ValueError(
+                "model self-play explores; a table with exploration off is not self-play"
+            )
         if self.search_simulations < 0:
             raise ValueError("search_simulations must be non-negative")
         if self.ply_stride < 1:
@@ -101,6 +120,8 @@ class CorpusManifest:
         conflicts: list[str] = []
         if self.player_kind != invocation.player_kind:
             conflicts.append("player_kind")
+        if self.opponent != invocation.opponent:
+            conflicts.append("opponent")
         if self.model_sha256 != invocation.model_sha256:
             conflicts.append("model_sha256")
         if self.search_simulations != invocation.search_simulations:
@@ -125,7 +146,7 @@ class CorpusManifest:
         return tuple(conflicts)
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "player_kind": self.player_kind,
             "model_sha256": self.model_sha256,
             "search_simulations": self.search_simulations,
@@ -141,6 +162,9 @@ class CorpusManifest:
             "games_dropped": self.games_dropped,
             "drop_rate": self.drop_rate,
         }
+        if self.player_kind == "mixed":
+            payload["opponent"] = self.opponent
+        return payload
 
     def to_json(self) -> str:
         return json.dumps(self.to_dict(), indent=2, allow_nan=False) + "\n"
@@ -155,7 +179,7 @@ class CorpusManifest:
             if not isinstance(key, str):
                 raise ValueError("Corpus manifest keys must be strings")
             payload[key] = value
-        expected = set(_FIELDS)
+        expected = set(_MIXED_FIELDS if payload.get("player_kind") == "mixed" else _FIELDS)
         found = set(payload)
         if found != expected:
             missing = ", ".join(sorted(expected - found))
@@ -164,9 +188,14 @@ class CorpusManifest:
                 f"Corpus manifest fields do not match (missing: {missing}; unknown: {unknown})"
             )
         kind = _string(payload, "player_kind")
-        if kind not in ("value", "model"):
-            raise ValueError("player_kind must be 'value' or 'model'")
-        player_kind: PlayerKind = "model" if kind == "model" else "value"
+        if kind == "value":
+            player_kind: PlayerKind = "value"
+        elif kind == "model":
+            player_kind = "model"
+        elif kind == "mixed":
+            player_kind = "mixed"
+        else:
+            raise ValueError("player_kind must be 'value', 'model', or 'mixed'")
         return cls(
             player_kind=player_kind,
             model_sha256=_string(payload, "model_sha256"),
@@ -182,6 +211,7 @@ class CorpusManifest:
             games_finished=_integer(payload, "games_finished"),
             games_dropped=_integer(payload, "games_dropped"),
             drop_rate=_number(payload, "drop_rate"),
+            opponent=_string(payload, "opponent") if player_kind == "mixed" else "",
         )
 
 

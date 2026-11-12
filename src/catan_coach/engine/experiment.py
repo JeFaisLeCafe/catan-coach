@@ -46,8 +46,19 @@ class _RandomPolicy(Player):  # type: ignore[misc]
         return game.state.random.choice(playable_actions)
 
 
-def play_scheduled_game(scheduled: ScheduledGame) -> CompletedGame | DroppedGame:
-    """Play `scheduled` once. Exceptions propagate; the caller records a retry."""
+# Called before each Ply with the number of Plies already played.
+PlyObserver = Callable[[int, Game], None]
+
+
+def play_scheduled_game(
+    scheduled: ScheduledGame,
+    observe: PlyObserver | None = None,
+) -> CompletedGame | DroppedGame:
+    """Play `scheduled` once. Exceptions propagate; the caller records a retry.
+
+    `observe` sees the Position before every Ply. It must not change the game
+    or draw from its random stream, or the replay is a different game.
+    """
     # Workers are fresh processes. Without this, a refused offer is handed to
     # its proposer because the upstream reply scan does not skip that Seat.
     install_trade_replies()
@@ -71,6 +82,8 @@ def play_scheduled_game(scheduled: ScheduledGame) -> CompletedGame | DroppedGame
     tracker = BehaviorTracker.start(game)
     plies = 0
     while game.winning_color() is None and game.state.num_turns < scheduled.rules.turn_limit:
+        if observe is not None:
+            observe(plies, game)
         initial_build = game.state.is_initial_build_phase
         # ValueFunctionPlayer breaks ties using the first legal Action.
         # Catanatron's set-backed choices otherwise depend on process hashes.

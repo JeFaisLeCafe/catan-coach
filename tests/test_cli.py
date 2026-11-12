@@ -335,3 +335,38 @@ def test_a_missing_trained_model_is_a_readable_error(
     assert code == 1
     assert "missing.txt" in captured.err
     assert "Traceback" not in captured.err
+
+
+def test_a_replayed_corpus_takes_its_games_from_the_experiment(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    called: dict[str, object] = {}
+
+    def fake_replay(experiment: Path, out: Path, **kwargs: object) -> object:
+        called.update(experiment=experiment, out=out, **kwargs)
+        raise ValueError("stopped after the first mismatch")
+
+    monkeypatch.setattr("catan_coach.engine.corpus.replay_experiment_corpus", fake_replay)
+    stored = tmp_path / "stored"
+    out = tmp_path / "corpus"
+
+    assert main(["corpus", "--out", str(out), "--replay", str(stored)]) == 1
+    assert "needs --model" in capsys.readouterr().err
+    assert main(["corpus", "--out", str(out), "--replay", str(stored), "--games", "5"]) == 1
+    assert "from the experiment" in capsys.readouterr().err
+    assert main(["corpus", "--out", str(out)]) == 1
+    assert "--games is required" in capsys.readouterr().err
+    assert called == {}
+
+    model = tmp_path / "model.txt"
+    argv = ["corpus", "--out", str(out), "--replay", str(stored), "--model", str(model)]
+    assert main([*argv, "--workers", "3"]) == 1
+    assert "first mismatch" in capsys.readouterr().err
+    assert called == {
+        "experiment": stored,
+        "out": out,
+        "model_path": model,
+        "ply_stride": 12,
+        "workers": 3,
+        "validation_fraction": 0.2,
+    }

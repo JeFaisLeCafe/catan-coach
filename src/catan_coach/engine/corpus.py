@@ -1,4 +1,8 @@
-"""Generate a Corpus of labelled Observations from self-play."""
+"""Generate a Corpus of labelled Observations.
+
+Self-play seats one kind of player at the whole table. A replayed Corpus
+re-plays a stored Strategy Experiment, a candidate against an opponent Policy.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +10,7 @@ import hashlib
 import subprocess
 from collections.abc import Sequence
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -22,6 +26,13 @@ from catan_coach.domain.corpus import (
     Split,
     split_for_game,
 )
+from catan_coach.domain.experiment import (
+    CompletedGame,
+    DroppedGame,
+    ExperimentPlan,
+    ScheduledGame,
+    schedule,
+)
 from catan_coach.domain.manifest import (
     MANIFEST_NAME,
     CorpusManifest,
@@ -29,12 +40,13 @@ from catan_coach.domain.manifest import (
     training_refusal,
 )
 from catan_coach.engine.board import corpus_map
+from catan_coach.engine.experiment_store import ExperimentStore, load_plan
 from catan_coach.engine.features import feature_vector
 from catan_coach.engine.model_player import (
     CORPUS_SEARCH_SIMULATIONS,
     WinProbabilityPlayer,
 )
-from catan_coach.models.gbdt import GbdtModel
+from catan_coach.models.gbdt import GbdtModel, calibration_sidecar
 
 COLORS = (Color.RED, Color.BLUE, Color.WHITE, Color.ORANGE)
 _GAMES_DIR = "games"
@@ -378,3 +390,177 @@ def _summarize(root: Path) -> CorpusSummary:
         rows_written=rows,
         win_rate_by_seat=win_rate,
     )
+
+
+class ReplayMismatch(ValueError):
+    """A replayed game did not reproduce its stored Strategy Experiment game."""
+
+
+@dataclass(frozen=True, slots=True)
+class _ReplayJob:
+    scheduled: ScheduledGame
+    expected: CompletedGame | DroppedGame
+    ply_stride: int
+    output_dir: str
+    base_seed: int
+    validation_fraction: float
+
+
+def replay_experiment_corpus(
+    experiment_dir: Path | str,
+    output_dir: Path | str,
+    *,
+    model_path: Path | str,
+    ply_stride: int = 12,
+    workers: int = 1,
+    validation_fraction: float = DEFAULT_VALIDATION_FRACTION,
+) -> CorpusSummary:
+    """Replay a stored candidate-versus-opponent experiment into a Corpus.
+
+    Every Seat at the table is sampled, the candidate's included, and labelled
+    with whether that Seat won. A game is written only after its winner,
+    candidate Seat, Ply count, and Turn count match the stored document; any
+    mismatch raises `ReplayMismatch` and stops the run. `model_path` must hash
+    to the frozen candidate model, and its calibration sidecar to the frozen
+    sidecar; only the path is rebound to this checkout.
+    """
+    if ply_stride < 1:
+        raise ValueError("ply_stride must be at least 1")
+    if workers < 1:
+        raise ValueError("workers must be at least 1")
+    stored_root = Path(experiment_dir)
+    plan = _rebind_candidate(load_plan(stored_root), Path(model_path))
+    scheduled = schedule(plan)
+    expected = _stored_outcomes(stored_root, plan, scheduled)
+    revision, dirty = _git_identity()
+    candidate_hash = plan.candidate.model_hash
+    if candidate_hash is None:
+        raise ValueError("the stored candidate has no frozen model")
+    invocation = CorpusManifest(
+        player_kind="mixed",
+        model_sha256=candidate_hash,
+        search_simulations=plan.candidate.search_simulations,
+        exploration=plan.candidate.explore,
+        ply_stride=ply_stride,
+        base_seed=plan.base_seed,
+        requested_games=len(scheduled),
+        validation_fraction=validation_fraction,
+        max_turns=plan.rules.turn_limit,
+        git_revision=revision,
+        dirty_tree=dirty,
+        games_finished=0,
+        games_dropped=0,
+        drop_rate=0.0,
+        opponent=plan.opponent.kind,
+    )
+    root = Path(output_dir)
+    (root / _GAMES_DIR).mkdir(parents=True, exist_ok=True)
+    (root / _DROPPED_DIR).mkdir(parents=True, exist_ok=True)
+    _bind_manifest(root, invocation)
+    finished = {int(path.stem) for path in (root / _GAMES_DIR).glob("*.parquet")}
+    already_dropped = {
+        int(path.name) for path in (root / _DROPPED_DIR).iterdir() if path.name.isdigit()
+    }
+    jobs = [
+        _ReplayJob(
+            scheduled=game,
+            expected=expected[game.seed],
+            ply_stride=ply_stride,
+            output_dir=str(root),
+            base_seed=plan.base_seed,
+            validation_fraction=validation_fraction,
+        )
+        for game in scheduled
+        if game.seed not in finished and game.seed not in already_dropped
+    ]
+    if workers == 1:
+        for job in jobs:
+            _replay_and_persist(job)
+    elif jobs:
+        with ProcessPoolExecutor(max_workers=workers) as pool:
+            list(pool.map(_replay_and_persist, jobs))
+    summary = _summarize(root)
+    _write_manifest(root, invocation.with_outcomes(summary.games_played, summary.games_dropped))
+    return summary
+
+
+def _rebind_candidate(plan: ExperimentPlan, model_path: Path) -> ExperimentPlan:
+    candidate = plan.candidate
+    if candidate.kind != "model":
+        raise ValueError("the stored candidate is not a model Policy")
+    if plan.opponent.kind == "model":
+        raise ValueError("the stored opponent is a model; replay a mixed table only")
+    if candidate.declared_preferences:
+        raise ValueError("the stored candidate declares preferences")
+    if not model_path.is_file():
+        raise ValueError(f"missing model file {model_path}")
+    if _file_sha256(model_path) != candidate.model_hash:
+        raise ValueError(f"{model_path} is not the stored candidate model")
+    sidecar_path: str | None = None
+    if candidate.sidecar_hash is not None:
+        sidecar = calibration_sidecar(model_path)
+        if not sidecar.is_file() or _file_sha256(sidecar) != candidate.sidecar_hash:
+            raise ValueError(f"{sidecar} is not the stored candidate's calibration sidecar")
+        sidecar_path = str(sidecar.resolve())
+    rebound = replace(candidate, model_path=str(model_path.resolve()), sidecar_path=sidecar_path)
+    return replace(plan, candidate=rebound)
+
+
+def _stored_outcomes(
+    root: Path,
+    plan: ExperimentPlan,
+    scheduled: Sequence[ScheduledGame],
+) -> dict[int, CompletedGame | DroppedGame]:
+    stored = ExperimentStore(root, plan).read_outcomes()
+    by_key = {result.result_key: result for result in stored}
+    outcomes: dict[int, CompletedGame | DroppedGame] = {}
+    for game in scheduled:
+        result = by_key.get(game.result_key)
+        if result is None:
+            raise ValueError(f"stored experiment has no result for seed {game.seed}")
+        if result.seed != game.seed or result.candidate_seat != game.candidate_seat:
+            raise ReplayMismatch(f"stored result {game.result_key} is not seed {game.seed}")
+        outcomes[game.seed] = result
+    if len(by_key) != len(scheduled):
+        raise ValueError("stored experiment holds results outside its schedule")
+    return outcomes
+
+
+def _replay_and_persist(job: _ReplayJob) -> None:
+    from catan_coach.engine.experiment import play_scheduled_game
+
+    samples: list[tuple[int, str, np.ndarray]] = []
+
+    def observe(ply: int, game: Game) -> None:
+        if ply % job.ply_stride == 0:
+            for color in game.state.colors:
+                samples.append((ply, color.name, feature_vector(game, color)))
+
+    result = play_scheduled_game(job.scheduled, observe)
+    _require_same_game(result, job.expected)
+    root = Path(job.output_dir)
+    seed = job.scheduled.seed
+    if isinstance(result, DroppedGame):
+        (root / _DROPPED_DIR / f"{seed:05d}").write_text("")
+        return
+    winner = Color(result.seats[result.winner].seat_name).name
+    split = split_for_game(seed, seed=job.base_seed, validation_fraction=job.validation_fraction)
+    dest = root / _GAMES_DIR / f"{seed:05d}.parquet"
+    tmp = dest.with_name(f"{dest.name}.tmp")
+    _rows_to_frame(seed, split, winner, samples, seed=seed).to_parquet(tmp)
+    tmp.replace(dest)
+
+
+def _require_same_game(
+    replayed: CompletedGame | DroppedGame,
+    stored: CompletedGame | DroppedGame,
+) -> None:
+    def outcome(result: CompletedGame | DroppedGame) -> tuple[object, ...]:
+        winner = result.winner if isinstance(result, CompletedGame) else None
+        return (result.seed, winner, result.candidate_seat, result.plies, result.turns)
+
+    if outcome(replayed) != outcome(stored):
+        raise ReplayMismatch(
+            f"seed {stored.seed} replayed as (seed, winner, candidate seat, plies, turns) "
+            f"{outcome(replayed)}, stored {outcome(stored)}"
+        )

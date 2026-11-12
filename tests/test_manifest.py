@@ -99,7 +99,7 @@ def test_resume_refuses_a_manifest_that_disagrees() -> None:
     assert stored.resume_conflicts(replace(stored, git_revision="other", dirty_tree=True)) == ()
     assert stored.resume_conflicts(replace(stored, base_seed=1)) == ("base_seed",)
     assert stored.resume_conflicts(replace(stored, max_turns=100)) == ("max_turns",)
-    assert _model_manifest().resume_conflicts(replace(_model_manifest(), exploration=False)) == (
+    assert _mixed_manifest().resume_conflicts(replace(_mixed_manifest(), exploration=True)) == (
         "exploration",
     )
     assert _model_manifest().resume_conflicts(replace(_model_manifest(), search_simulations=0)) == (
@@ -206,3 +206,71 @@ def test_a_loader_refuses_a_missing_manifest_and_a_high_drop_rate(tmp_path: Path
         encoding="utf-8",
     )
     require_trainable_corpus(clean)
+
+
+def _mixed_manifest() -> CorpusManifest:
+    return CorpusManifest(
+        player_kind="mixed",
+        model_sha256=_MODEL_SHA,
+        search_simulations=4,
+        exploration=False,
+        ply_stride=12,
+        base_seed=40000,
+        requested_games=2000,
+        validation_fraction=0.2,
+        max_turns=1000,
+        git_revision="abc123",
+        dirty_tree=False,
+        games_finished=0,
+        games_dropped=0,
+        drop_rate=0.0,
+        opponent="value",
+    )
+
+
+def test_a_mixed_table_records_its_candidate_and_opponent() -> None:
+    manifest = _mixed_manifest().with_outcomes(2000, 0)
+    payload = json.loads(manifest.to_json())
+
+    assert CorpusManifest.from_json(manifest.to_json()) == manifest
+    assert payload["player_kind"] == "mixed"
+    assert payload["opponent"] == "value"
+    assert payload["model_sha256"] == _MODEL_SHA
+    assert payload["search_simulations"] == 4
+    assert payload["exploration"] is False
+    assert payload["base_seed"] == 40000
+    assert payload["requested_games"] == 2000
+    assert training_refusal(manifest) is None
+
+
+def test_self_play_manifests_keep_their_shape_and_name_no_opponent() -> None:
+    assert "opponent" not in json.loads(_model_manifest().to_json())
+    assert "opponent" not in json.loads(_value_manifest().to_json())
+    with pytest.raises(ValueError, match="no opponent"):
+        replace(_model_manifest(), opponent="value")
+    with pytest.raises(ValueError, match="name its opponent"):
+        replace(_mixed_manifest(), opponent="")
+    payload = json.loads(_mixed_manifest().to_json())
+    del payload["opponent"]
+    with pytest.raises(ValueError, match="missing: opponent"):
+        CorpusManifest.from_json(json.dumps(payload))
+
+
+def test_a_self_play_claim_for_the_mixed_table_is_refused(tmp_path: Path) -> None:
+    from catan_coach.engine.corpus import _bind_manifest
+
+    claim = json.loads(_mixed_manifest().to_json())
+    claim["player_kind"] = "model"
+    del claim["opponent"]
+    with pytest.raises(ValueError, match="not self-play"):
+        CorpusManifest.from_json(json.dumps(claim))
+
+    self_play = _model_manifest()
+    (tmp_path / MANIFEST_NAME).write_text(self_play.to_json(), encoding="utf-8")
+    with pytest.raises(ValueError, match="disagrees") as error:
+        _bind_manifest(tmp_path, _mixed_manifest())
+    assert "player_kind" in str(error.value)
+    assert "opponent" in str(error.value)
+    assert _mixed_manifest().resume_conflicts(replace(_mixed_manifest(), opponent="random")) == (
+        "opponent",
+    )

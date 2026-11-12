@@ -95,7 +95,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
 
     corpus_parser = subparsers.add_parser(_CORPUS, help="generate a Corpus of self-play games")
-    corpus_parser.add_argument("--games", type=int, required=True)
+    corpus_parser.add_argument("--games", type=int)
     corpus_parser.add_argument("--out", type=Path, required=True)
     corpus_parser.add_argument("--stride", type=int, default=12)
     corpus_parser.add_argument("--workers", type=int, default=os.cpu_count() or 1)
@@ -110,6 +110,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--model",
         type=Path,
         help="saved model used when --players model",
+    )
+    corpus_parser.add_argument(
+        "--replay",
+        type=Path,
+        help=(
+            "replay a stored candidate-versus-opponent Strategy Experiment instead of "
+            "self-play; --model must be its frozen candidate model"
+        ),
     )
     corpus_parser.add_argument(
         "--validation-fraction",
@@ -145,6 +153,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     calibrate_parser.add_argument("--installed", type=Path, required=True)
     calibrate_parser.add_argument("--out", type=Path, required=True)
     calibrate_parser.add_argument("--seed", type=int, default=0)
+    calibrate_parser.add_argument(
+        "--keep-candidate-map",
+        action="store_true",
+        help="write the fitted map beside --model even when Brier does not clear",
+    )
 
     report_parser = subparsers.add_parser(_REPORT, help="report a model against the Baselines")
     report_parser.add_argument("--corpus", type=Path, required=True)
@@ -263,8 +276,34 @@ def _run_play(args: argparse.Namespace) -> int:
 
 
 def _run_corpus(args: argparse.Namespace) -> int:
-    from catan_coach.engine.corpus import generate_corpus
+    from catan_coach.engine.corpus import generate_corpus, replay_experiment_corpus
 
+    if args.replay is not None:
+        if args.games is not None or args.players != "value" or args.seed != 0:
+            print(
+                "--replay takes its games, players, and seeds from the experiment", file=sys.stderr
+            )
+            return 1
+        if args.model is None:
+            print("--replay needs --model, the stored candidate model", file=sys.stderr)
+            return 1
+        try:
+            summary = replay_experiment_corpus(
+                args.replay,
+                args.out,
+                model_path=args.model,
+                ply_stride=args.stride,
+                workers=args.workers,
+                validation_fraction=args.validation_fraction,
+            )
+        except ValueError as error:
+            print(error, file=sys.stderr)
+            return 1
+        print(format_summary(summary))
+        return 0
+    if args.games is None:
+        print("--games is required without --replay", file=sys.stderr)
+        return 1
     summary = generate_corpus(
         args.out,
         n_games=args.games,
@@ -348,6 +387,7 @@ def _run_calibrate(args: argparse.Namespace) -> int:
             installed_path=args.installed,
             out=args.out,
             seed=args.seed,
+            keep_map=args.keep_candidate_map,
         )
     except ValueError as error:
         print(error, file=sys.stderr)
