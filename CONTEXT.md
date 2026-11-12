@@ -11,15 +11,33 @@ Action by Win Probability so you can see what you should have played and by how 
 A complete game state that play can resume from, including whose turn it is.
 _Avoid_: state, board, situation
 
+**Action**:
+One legal choice a Position offers, whether or not anyone plays it.
+
 **Ply**:
-One Action taken by one player. Positions within a game are addressed by ply number.
+The one Action a Seat actually plays. Positions within a game are addressed by ply number.
 _Avoid_: move, step
 
 **Turn**:
 Everything one player does between rolling and ending. Contains several Plies.
 
-**Action**:
-One legal move available in a Position.
+**Setup**:
+The placements before the first roll. Each Seat places two settlements and two roads.
+
+**Pip**:
+One dot on a number token: one of the 36 ways two dice can roll that number. A 6 or an 8 is 5 pips; a 2 or a 12 is 1. The desert has none.
+
+**Opening pips**:
+The pips on the numbered tiles touching the two Setup settlements. A tile touching both settlements counts twice.
+
+**Distinct resources**:
+How many different resource types those two settlements touch. The same resource on two tiles counts once.
+
+**Adjacent port**:
+Either Setup settlement touching a port.
+
+**Post-setup build**:
+A settlement, city, or road placed after Setup. The two Setup settlements and two Setup roads are excluded, so a post-setup settlement count of 0.20 means almost no third settlement was built.
 
 **Seat**:
 A player's place at the table. Seat order confers an advantage, so a Win Probability is
