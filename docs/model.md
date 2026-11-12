@@ -52,5 +52,8 @@ from the untouched half. It exits nonzero and leaves the output unchanged if any
 
 The [generation-7 strength audit](./experiments/generation-7-vs-value/README.md) found 12 wins
 in 2,000 games against three `ValueFunctionPlayer` opponents with four search simulations and
-exploration disabled. Generation 7 loses under that preregistered plan. Held-out Calibration
-does not establish strong play; Policy improvement is required before generating more self-play.
+exploration disabled. Generation 7 loses under that preregistered plan. The opening-pip Policy
+then won 65 of 2,000 on different seeds and loses under the same rule. Held-out Calibration
+does not establish strong play. The next model learns from those value-function games, as
+specified in [issue 11](../.scratch/strategy-lab/issues/11-learn-from-value-function-games.md),
+rather than from another self-play Corpus of this Policy.

@@ -61,3 +61,10 @@ uv run catan-coach lab report data/experiments/generation-7-opening-production \
 
 Run this only from a clean tree at the source commit recorded in the report. Do not stop early
 or change the model from the result. Model adoption stays on the calibration harness.
+
+## Next model
+
+The next Win Probability is specified in
+[issue 11](../../.scratch/strategy-lab/issues/11-learn-from-value-function-games.md). It learns
+from the opening-production games above, where the value-function Seats won, and its strength
+plan is frozen at seeds `50000–51999`. More self-play of the losing Policy is not that Corpus.
