@@ -94,6 +94,8 @@ def train_matrix(
     seed: int = 0,
     name: str = "gbdt",
     masked_columns: Sequence[int] = (),
+    rounds: int = _NUM_BOOST_ROUND,
+    leaves: int | None = None,
 ) -> GbdtModel:
     if features.shape[0] == 0:
         raise ValueError("Corpus has no train games")
@@ -102,10 +104,14 @@ def train_matrix(
         training_features = _mask_columns(features, masked_columns)
     params = dict(_PARAMS)
     params["seed"] = seed
+    if leaves is not None:
+        params["num_leaves"] = leaves
+    if rounds < 1:
+        raise ValueError("rounds must be at least 1")
     booster = lgb.train(
         params,
         lgb.Dataset(training_features, label=won, free_raw_data=True),
-        num_boost_round=_NUM_BOOST_ROUND,
+        num_boost_round=rounds,
     )
     return GbdtModel(booster, name=name)
 

@@ -134,6 +134,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=Path,
         help="also require the candidate to beat this model; the file is not replaced",
     )
+    train_parser.add_argument(
+        "--mask-phase",
+        action="store_true",
+        help="zero the turn-phase columns so the trees cannot split on them",
+    )
+    train_parser.add_argument("--rounds", type=int, default=80, help="boosting rounds")
+    train_parser.add_argument("--leaves", type=int, help="leaves per tree (default 15)")
 
     adopt_parser = subparsers.add_parser(
         _ADOPT,
@@ -326,7 +333,14 @@ def _run_train(args: argparse.Namespace) -> int:
             return loaded
         installed = loaded
     try:
-        model, comparison, n_games = _fit_mixture(args.corpus, args.seed, installed)
+        model, comparison, n_games = _fit_mixture(
+            args.corpus,
+            args.seed,
+            installed,
+            mask_phase=args.mask_phase,
+            rounds=args.rounds,
+            leaves=args.leaves,
+        )
     except ValueError as error:
         print(error, file=sys.stderr)
         return 1
@@ -416,8 +430,11 @@ def _fit_mixture(
     installed: WinProbabilityModel | None,
     *,
     model_name: str = "gbdt",
+    mask_phase: bool = False,
+    rounds: int = 80,
+    leaves: int | None = None,
 ) -> tuple[GbdtModel, BaselineComparison, int]:
-    from catan_coach.engine.features import public_vp_indices
+    from catan_coach.engine.features import phase_indices, public_vp_indices
     from catan_coach.engine.mixture import materialize_mixture
     from catan_coach.models.baselines import ConstantModel, VictoryPointShareModel
     from catan_coach.models.train import compare_matrix, train_matrix
@@ -426,7 +443,16 @@ def _fit_mixture(
     data.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(dir=data) as directory:
         mixture = materialize_mixture(paths, Path(directory))
-        model = train_matrix(mixture.train_features, mixture.train_won, seed=seed, name=model_name)
+        masked = phase_indices(mixture.n_players) if mask_phase else ()
+        model = train_matrix(
+            mixture.train_features,
+            mixture.train_won,
+            seed=seed,
+            name=model_name,
+            masked_columns=masked,
+            rounds=rounds,
+            leaves=leaves,
+        )
         comparison = compare_matrix(
             model,
             mixture.validation_features,
