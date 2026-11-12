@@ -1,0 +1,62 @@
+{
+  "artifact_sha256": {
+    "calibration.txt": "edeeba70adad3553d72b0236cef8cebd077df5adc28ab8109418bed10c1b1dc5",
+    "plan.json": "2e43aed50f8b25e352fba2ad9178542c7ae222876dbc299879ce6d1ebf233f4b",
+    "report.json": "0ab6d3179237c11353f02f65bd09e27feb36c341c1ae610eb676d0734d91d6c5",
+    "report.md": "c4ef903cbdb2a93e0c84f7c7082cb2db345ccba12a285f745025a06ee1da4cc6"
+  },
+  "decision": "reaches 30%",
+  "elapsed_seconds": 1958,
+  "engine_sha": "ecf931181b9a65bb4116a2153fb78c16f1438e00",
+  "environment": {
+    "catanatron": "3.3.0",
+    "lightgbm": "4.7.0",
+    "numpy": "2.4.6",
+    "platform": "macOS-14.6.1-arm64-arm-64bit",
+    "python": "3.11.6"
+  },
+  "frozen_plan_sha256": "56591eec86d5ebf2d42a3310254c1eecfb078e3a4dad3d4d9555b34cc1ae8276",
+  "model_sha256": "616ce2002fb21ec96335637fcf4e972e0efa29b700febedc4f2655490a8ce2e8",
+  "pilot": {
+    "completed": 4,
+    "elapsed_seconds": 14,
+    "outcomes_read": false,
+    "seeds": [
+      82000,
+      82003
+    ],
+    "terminal_failures": 0,
+    "workers": 4
+  },
+  "python_hash_seed": "0",
+  "raw_directory": "data/experiments/production-features-vs-value",
+  "raw_hash_algorithm": "SHA-256 of sorted relative paths, each followed by NUL and file bytes; plan.json, games/*.json and failures/**/*.json",
+  "raw_sha256": "098c35f0cd2b9516c5a3a705f78ee130b3f92ba88e8df6a609754b48168a106f",
+  "run_command": "PYTHONHASHSEED=0 uv run catan-coach lab run .scratch/strategy-lab/plans/12-production-features.json --out data/experiments/production-features-vs-value --workers 8",
+  "scheduled_per_seat": [
+    500,
+    500,
+    500,
+    500
+  ],
+  "schema": 1,
+  "seed_range": [
+    80000,
+    81999
+  ],
+  "sidecar_sha256": "f31d0daacd9e08b295854ac81631a22125e988080b2fdde49a1dfcc5d1cce3b2",
+  "source_commit": "dd48efe0b48db63b6f36bf469819b8cef9120c2c",
+  "source_dirty": false,
+  "threshold": 0.3,
+  "verification": [
+    "2000 unique seeds in range",
+    "500 scheduled games per Seat",
+    "each four-game block contains all Seats",
+    "all result Policy identities, source commits and engine pins match",
+    "model and sidecar hashes match the installed files",
+    "winner and Seat denominators and the Wilson interval independently computed",
+    "reports regenerated identically",
+    "four complete game documents from the first scheduling block replayed identically in a fresh process with hash seed 1 versus the original eight-worker run with hash seed 0"
+  ],
+  "workers": 8
+}

@@ -1,6 +1,6 @@
 # 12 — Reach a 30% win rate against three ValueFunctionPlayer Seats
 
-**Status:** in-progress
+**Status:** resolved
 
 **Blocked by:** 11 (resolved)
 
@@ -69,3 +69,15 @@ Frozen before any game is played. Plan:
   when the completed-game and attrition-as-losses Wilson lower bounds are both above 0.30;
   **below 30%** when the attrition-as-wins upper bound is below 0.30; otherwise inconclusive.
 - No retuning after outcomes. The model stays installed either way; calibration installed it.
+
+### Confirmation 1 result — 2026-11-12
+
+[Artifacts and reproduction](../../../docs/experiments/production-features/README.md).
+Clean source `dd48efe`, eight workers, 1,958 seconds. Pilot 4/4 in 14 seconds, outcomes unread.
+**1,025 of 2,000 wins (51.25%, 95% Wilson 49.09%–53.40%)**, no attrition. Seats 280, 256, 243,
+246. Decision: **reaches 30%**. All issue-08 checks, byte-identical report regeneration, and a
+fresh-process hash-seed-1 replay of the first block passed.
+
+Catan Coach may now claim: the production-features model with production-pip openings, four
+search simulations, and exploration disabled won 1,025 of 2,000 games (51.25%, 95% Wilson
+49.09%–53.40%) against three Catanatron `ValueFunctionPlayer` opponents on seeds 80000–81999.

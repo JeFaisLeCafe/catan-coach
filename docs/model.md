@@ -4,7 +4,8 @@
 > [issue 12](../.scratch/strategy-lab/issues/12-reach-thirty-percent.md): 10,000
 > `ValueFunctionPlayer` self-play games, the Observation widened by 188 public production
 > columns, turn-phase columns hidden, 400 rounds of 63 leaves.
-> [Calibration report](./experiments/production-features/calibration.txt). The value-table
+> [Calibration report](./experiments/production-features/calibration.txt). It won 1,025 of 2,000
+> games against three `ValueFunctionPlayer` opponents ([report](./experiments/production-features/README.md)). The value-table
 > description below is kept as history.
 
 The previous `model.txt` was the value-table model: LightGBM trees trained on the games where

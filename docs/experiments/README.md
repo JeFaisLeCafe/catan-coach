@@ -69,3 +69,12 @@ Plan: [`.scratch/strategy-lab/plans/11-value-table-strength.json`](../../.scratc
 Learned from the opening-production games, installed through the calibration gate, then played
 on seeds `50000–51999`. It won 125 of 2,000 and loses under the same rule.
 [Report and reproduction](./value-table-candidate/README.md).
+
+## Production-features model
+
+Plan: [`.scratch/strategy-lab/plans/12-production-features.json`](../../.scratch/strategy-lab/plans/12-production-features.json)
+
+Public production features, hidden turn-phase columns, and 10,000 `ValueFunctionPlayer`
+self-play games. It won 1,025 of 2,000 on seeds `80000–81999` (51.25%, Wilson 49.09%–53.40%)
+and reaches the 30% bar in [issue 12](../../.scratch/strategy-lab/issues/12-reach-thirty-percent.md).
+[Report and reproduction](./production-features/README.md).
