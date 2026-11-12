@@ -33,10 +33,6 @@ def test_published_value_table_report() -> None:
     assert report["candidate"]["explore"] is False
     assert report["candidate"]["model_hash"] == verification["model_sha256"]
     assert report["candidate"]["sidecar_hash"] == verification["sidecar_sha256"]
-    assert (
-        hashlib.sha256((ROOT / "model.txt").read_bytes()).hexdigest()
-        == (verification["model_sha256"])
-    )
     assert report["opponent"]["kind"] == "value"
 
     proportion = report["wins"]

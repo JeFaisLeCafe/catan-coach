@@ -50,3 +50,22 @@ production, reachable production, and ports.
   Validation Brier 0.1292 against vp-share 0.1515 (skill +0.147). Not calibrated or installed.
 - Screen, seeds 70000–70199, search 0: **53/200 (26.5%)**, against 6/200 for the installed
   model and 43/200 for `ValueFunctionPlayer` in the candidate Seat.
+- Screen, same seeds, search 4: **86/200 (43.0%, Wilson 36.3%–49.9%)**.
+- Calibration gate on 961 untouched `vfp-v2` validation games
+  ([report](../../../docs/experiments/production-features/calibration.txt)): Brier difference
+  against constant −0.0565 [−0.0611, −0.0519], vp-share −0.0220 [−0.0251, −0.0188], installed
+  value-table −0.0151 [−0.0177, −0.0125]. Installed as `model.txt` (`c4fa251`).
+
+## Preregistered confirmation 1
+
+Frozen before any game is played. Plan:
+[`.scratch/strategy-lab/plans/12-production-features.json`](../plans/12-production-features.json).
+
+- Candidate: the installed production-features model and map, pip openings, four search
+  simulations, exploration off.
+- Opponent: `ValueFunctionPlayer` in the other three Seats.
+- Seeds `80000–81999`, 500 games per Seat. Pilot `82000–82003`, runtime only, outcomes unread.
+- Same map, rules, and attrition rules as issue 08. Decision against `0.30`: **reaches 30%**
+  when the completed-game and attrition-as-losses Wilson lower bounds are both above 0.30;
+  **below 30%** when the attrition-as-wins upper bound is below 0.30; otherwise inconclusive.
+- No retuning after outcomes. The model stays installed either way; calibration installed it.

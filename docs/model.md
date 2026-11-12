@@ -1,6 +1,13 @@
 # Installed model
 
-`model.txt` is the value-table model: LightGBM trees trained on the games where
+> **Superseded 2026-11-12.** `model.txt` is now the production-features model from
+> [issue 12](../.scratch/strategy-lab/issues/12-reach-thirty-percent.md): 10,000
+> `ValueFunctionPlayer` self-play games, the Observation widened by 188 public production
+> columns, turn-phase columns hidden, 400 rounds of 63 leaves.
+> [Calibration report](./experiments/production-features/calibration.txt). The value-table
+> description below is kept as history.
+
+The previous `model.txt` was the value-table model: LightGBM trees trained on the games where
 `ValueFunctionPlayer` beat generation 7. `model.calibration.json` is its monotone probability map.
 It replaced generation 7 on 2026-11-12 through the calibration gate in
 [issue 11](../.scratch/strategy-lab/issues/11-learn-from-value-function-games.md).
