@@ -135,3 +135,32 @@ _Avoid_: play style (too vague), strategy (implies intent or causality)
 **Opponent Population**:
 The declared mix of Policies and strengths faced in a Strategy Experiment. A result against one
 Opponent Population is not assumed to transfer to another.
+
+**Arena**:
+A league in which a declared field of Entrants plays a balanced schedule of mixed four-player
+tables, producing a Rating for each.
+_Avoid_: tournament (suggests a knockout), bracket
+
+**Entrant**:
+One named, frozen Policy taking part in an Arena. The same model at two Search Budgets is two
+Entrants.
+
+**Rating**:
+An Entrant's fitted strength from every Arena game it played, with Seat effects removed, stated
+with a 95% interval. A gap inside the intervals is not a ranking.
+_Avoid_: Elo (the display scale borrows Elo's units, not its update rule)
+
+**Champion**:
+The installed model, as the Policy a candidate must beat to replace it.
+
+**Champion Challenge**:
+A preregistered Strategy Experiment of a candidate against three Champion Seats. Passing it, with
+the calibration gate, promotes the candidate.
+
+**Strategy Profile**:
+A Behavior Profile summarised into named themes (expansion vs upgrade, awards, opening, trading,
+tempo) for one Entrant across its games. Descriptive, like the Behavior Profile it comes from.
+
+**Strategy Report**:
+A readable page built from computed facts, with an optional narrative in which every number cites a
+fact.
