@@ -76,15 +76,17 @@ of this spec.
 
 A **claim** is `{fact_id, template}`, where the template is one of a fixed set allowed for that
 fact's class. The validator checks: every fact id exists; each template is allowed for its fact;
-the free prose contains no digits, percentages, or causal verbs ("causes", "improves", "makes you
+every section id is in the fixed set; every free-prose string contains no digits, percentages, or causal verbs ("causes", "improves", "makes you
 win", "leads to", …). Because numbers and causal wording come only from rendered claims, prose
 cannot attach a number or a cause to the wrong fact.
 
 ### Narrative step
 
 - Input: `facts.json` and a fixed prompt committed in the repo. No raw games.
-- Output: JSON sections `{id, title, paragraphs:[{prose_before, claims:[{fact_id, template}],
-  prose_after}]}`.
+- Output: JSON sections `{section, paragraphs:[{prose_before, claims:[{fact_id, template}],
+  prose_after}]}`. `section` is one of a fixed set of ids (ladder, head-to-head, one per theme,
+  interventions); code renders its title. Every string the LLM writes is free prose and passes the
+  same validation.
 - Cached by hash of facts + prompt + model id under the report directory; regeneration reuses the
   cache. `--no-narrative` skips the step.
 - The model id is a CLI option with a default pinned at implementation time to the latest Claude

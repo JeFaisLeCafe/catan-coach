@@ -10,6 +10,7 @@
 - [ ] Challenge and anchor plans committed before play, fresh seeds
 - [ ] Decision computed by the existing Strength Report rules against `0.25`
 - [ ] Anchor check: candidate and Champion on identical anchor schedules; paired-bootstrap lower
-      bound of the difference above `−0.03`
+      bound of the difference above `−0.03`; missing games scored adversarially; an invalid
+      anchor run refuses promotion
 - [ ] Promotion only after the calibration gate; refusal is published too
 - [ ] Lineage row: model hashes, corpus, gate report, challenge report, date

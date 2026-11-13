@@ -91,7 +91,9 @@ two search budgets is two Entrants.
 - Report ratings on an Elo-like display scale (`400 / ln 10` per unit) and, for readability, each
   Entrant's expected win rate against three average Entrants.
 - Head-to-head: for each pair, the share of shared tables that one of the two won which the first
-  one won, with a block-bootstrap interval from the same replicates.
+  one won, with a block-bootstrap interval from the same replicates. A pair with no tables won
+  by either is reported as unavailable. Replicates with a zero denominator are excluded and
+  counted; if more than 1% of replicates are excluded, the interval is reported as unavailable.
 
 ### Promotion Cycle
 
@@ -109,6 +111,10 @@ two search budgets is two Entrants.
    `ValueFunctionPlayer` Seats (identical seeds and Seats). Promotion also requires the paired
    bootstrap 95% lower bound of candidate minus Champion win rate to be above `−0.03`: the
    candidate must not have become weaker against a fixed outsider while beating the Champion.
+   Either anchor run failing the Strategy Lab validity rules (any terminal failure, more than 1%
+   drops) invalidates the check and refuses promotion. A scheduled game missing for either side
+   is scored adversarially: a loss for the candidate, a win for the Champion; no pair is
+   dropped.
 6. **Promote** — install the candidate as `model.txt`, append the lineage entry, add it to the next
    league field.
 

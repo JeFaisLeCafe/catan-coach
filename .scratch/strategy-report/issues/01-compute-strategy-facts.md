@@ -4,7 +4,7 @@
 `facts.json`: ladder, head-to-head, Strategy Profile themes, Intervention results, each fact with
 id, class, value, interval, sample size, and source.
 
-**Blocked by:** Arena 05, 06
+**Blocked by:** Arena 05, Strategy Report 06
 
 **Status:** ready-for-agent
 
