@@ -1,7 +1,7 @@
 {
   "name": "settlement-city-reference",
   "candidate": {
-    "name": "generation-7",
+    "name": "production-features",
     "kind": "model",
     "model_path": "../../../model.txt",
     "sidecar_path": "../../../model.calibration.json",

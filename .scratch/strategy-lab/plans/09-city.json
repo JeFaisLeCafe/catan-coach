@@ -1,14 +1,17 @@
 {
   "name": "city-preference",
   "candidate": {
-    "name": "generation-7",
+    "name": "production-features",
     "kind": "model",
     "model_path": "../../../model.txt",
     "sidecar_path": "../../../model.calibration.json",
     "search_simulations": 0,
     "explore": false,
     "preferences": [
-      {"category": "city", "delta": 0.05}
+      {
+        "category": "city",
+        "delta": 0.05
+      }
     ]
   },
   "opponent": {

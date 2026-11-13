@@ -5,6 +5,14 @@ settlement/city selection preference changes simulated behavior and win rate.
 
 **Blocked by:** 07, 08
 
+> **Amendment 2026-11-13, before any game was played.** The candidate is the installed
+> production-features model (`model.txt` sha256 `616ce2002fb21ec96335637fcf4e972e0efa29b700febedc4f2655490a8ce2e8`, sidecar `f31d0daacd9e08b295854ac81631a22125e988080b2fdde49a1dfcc5d1cce3b2`), not
+> generation 7. The plans already loaded the root `model.txt`; only their candidate name changes.
+> Reason: generation 7 wins 0.6% at search 4, so a preference effect on it says little about a
+> Policy anyone would use. Everything else below — deltas, seeds `30000`+, counts, bootstrap seed,
+> manipulation check, validity rules — is unchanged. Read "generation 7" below as
+> "the production-features model".
+
 **Status:** ready-for-agent
 
 ## Read first

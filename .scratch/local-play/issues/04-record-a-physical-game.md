@@ -5,7 +5,7 @@ random outcomes observed in a physical game.
 
 **Blocked by:** 01 (Open a local game in the browser)
 
-**Status:** ready-for-agent
+**Status:** wontfix (dropped from the roadmap 2026-11-13)
 
 - [ ] Game creation offers Table Recorder separately from human-versus-bot play
 - [ ] Every Seat is manual and no bot advances automatically
