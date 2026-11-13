@@ -9,7 +9,9 @@ Profiles.
 **Status:** ready-for-agent
 
 - [ ] Ladder ordered by Rating with 95% intervals and expected win rate
-- [ ] Head-to-head matrix with Wilson intervals
+- [ ] Head-to-head matrix with block-bootstrap intervals
+- [ ] Per-Entrant Behavior Profile means with block-bootstrap intervals, split by wins and losses,
+      and Turns in won games
 - [ ] Validity line using the Strategy Lab rules
 - [ ] Byte-identical regeneration; JSON and Markdown agree
 - [ ] The JSON is the input contract for the Strategy Report

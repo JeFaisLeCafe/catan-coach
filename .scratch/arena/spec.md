@@ -65,10 +65,13 @@ two search budgets is two Entrants.
 
 ### Schedule
 
-- A league plan declares Entrants, games per Entrant, base seed, rules, and map policy.
-- Tables hold four distinct Entrants. With `n` Entrants the schedule cycles through all `C(n,4)`
-  combinations, and through all four Seat rotations of each, in blocks; each block plays the same
-  board seed for all four rotations. Every Entrant therefore plays every Seat equally often.
+- A league plan declares at least four Entrants, a number of **cycles**, base seed, rules, and map
+  policy.
+- Tables hold four distinct Entrants. One cycle plays every one of the `C(n,4)` combinations once
+  as a **block** of four games: the four cyclic Seat rotations of that combination, all on the same
+  board seed. Each block has its own seed.
+- Per cycle every Entrant plays `4·C(n-1,3)` games, `C(n-1,3)` in each Seat. Games per Entrant are
+  therefore a multiple of that number; the plan states cycles, not games.
 - Seeds come from a range not used by any earlier experiment, starting at `200000`.
 - Games, persistence, resume, drops, and technical failures reuse the Strategy Lab store and its
   validity rules (more than 1% drops or any terminal failure invalidates the league).
@@ -77,13 +80,18 @@ two search budgets is two Entrants.
 
 - Each completed game is one observation: the winning Entrant out of the four at the table.
 - Fit a multinomial-logit (Plackett–Luce first-choice) strength model,
-  `P(i wins) = exp(r_i + s_seat(i)) / Σ exp(r_j + s_seat(j))`, with one Seat effect per Seat and
-  ratings centred to mean zero. Maximum likelihood, pure Python/NumPy in `domain/`.
-- 95% intervals from a fixed-seed game-level bootstrap (10,000 replicates).
+  `P(i wins) = exp(r_i + s_seat(i)) / Σ exp(r_j + s_seat(j))`. Identification: ratings sum to
+  zero and Seat effects sum to zero.
+- The estimator is penalized maximum likelihood with a declared Gaussian penalty (standard
+  deviation 2 on each rating and Seat effect), so an Entrant with no wins, such as random, still
+  gets a finite, clearly low rating. The penalty is stated in every report. Pure Python/NumPy in
+  `domain/`.
+- 95% intervals from a fixed-seed **block bootstrap** (10,000 replicates): resample blocks, keeping
+  the four same-seed rotations together, because they share a board and are not independent.
 - Report ratings on an Elo-like display scale (`400 / ln 10` per unit) and, for readability, each
   Entrant's expected win rate against three average Entrants.
 - Head-to-head: for each pair, the share of shared tables that one of the two won which the first
-  one won, with a Wilson interval.
+  one won, with a block-bootstrap interval from the same replicates.
 
 ### Promotion Cycle
 
@@ -95,9 +103,12 @@ two search budgets is two Entrants.
    on held-out games. Failing the gate ends the cycle.
 5. **Champion Challenge** — a 2,000-game plan committed before play: candidate in one Seat, three
    Champion Seats, fresh seeds, issue-08 decision rule against `0.25`. Promotion requires the
-   lower Wilson bound above `0.25` under both completed-game and attrition-as-losses readings. The
-   challenge plan also includes a 2,000-game anchor run against three `ValueFunctionPlayer` Seats;
-   promotion is refused if that win rate falls below the Champion's published anchor interval.
+   lower Wilson bound above `0.25` under both completed-game and attrition-as-losses readings.
+   **Anchor check**, preregistered in the same commit: the candidate and the Champion, at the same
+   Search Budget and exploration setting, each play the same 2,000 scheduled games against three
+   `ValueFunctionPlayer` Seats (identical seeds and Seats). Promotion also requires the paired
+   bootstrap 95% lower bound of candidate minus Champion win rate to be above `−0.03`: the
+   candidate must not have become weaker against a fixed outsider while beating the Champion.
 6. **Promote** — install the candidate as `model.txt`, append the lineage entry, add it to the next
    league field.
 
@@ -122,7 +133,7 @@ including `AlphaBetaPlayer`.
   schedule is deterministic from the plan.
 - Rating tests: synthetic games drawn from known strengths recover their order and lie inside the
   interval; equal strengths give overlapping intervals; Seat effects are recovered; the fit is
-  invariant to Entrant ordering.
+  invariant to Entrant ordering; a zero-win Entrant gets a finite rating.
 - Resume test: an interrupted tiny league resumes to an identical report.
 - Engine-marked smoke test: a four-Entrant league of a few games completes with `AlphaBetaPlayer`.
 

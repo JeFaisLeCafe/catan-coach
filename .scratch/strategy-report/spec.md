@@ -22,11 +22,10 @@ has two layers with a hard boundary between them.
    **Strategy Profile** per Entrant, and the Intervention results. Facts are written to
    `facts.json`, each with a stable id, value, interval where one exists, sample size, and source
    artifact.
-2. **Narrative** — an LLM (Claude, through the Anthropic SDK) receives only `facts.json` and writes
-   short plain-language sections. Every numeric claim must cite a fact id. A validator rejects any
-   narrative whose numbers do not match the cited facts, or that states a causal claim not backed
-   by an Intervention fact. The report renders without the narrative if the LLM is unavailable or
-   validation fails.
+2. **Narrative** — an LLM (Claude, through the Anthropic SDK) receives only `facts.json`. It
+   selects and orders **claims** (structured references to facts) and writes connecting prose.
+   Code, not the LLM, renders every number and every causal sentence from the cited fact. The
+   report renders without the narrative if the LLM is unavailable or validation fails.
 
 Charts are drawn from facts, never from narrative.
 
@@ -51,7 +50,8 @@ Charts are drawn from facts, never from narrative.
 Computed per Entrant from Behavior Profiles across its games, with intervals, split by wins and
 losses where useful:
 
-- **Expansion vs upgrade** — post-setup settlements, cities, and which came first.
+- **Expansion vs upgrade** — post-setup settlements and cities per game, and the first post-setup
+  build category (the only order the Behavior Profile records).
 - **Awards** — Longest Road and Largest Army ownership rate; knights played.
 - **Opening** — opening pips, distinct resources, adjacent port.
 - **Development cards** — cards bought per game.
@@ -63,20 +63,28 @@ of this spec.
 
 ### Claim classes
 
-- `descriptive` — a habit's rate or a difference between Entrants. Narrative must use association
+- `descriptive` — a habit's rate or a difference between Entrants. Rendered with association
   language ("tends to", "in its wins").
-- `interventional` — a paired Intervention comparison. Narrative may say "in this simulator,
-  preferring X changed the win rate by Y", only if the manipulation check passed.
+- `interventional` — a paired Intervention comparison. Each such fact carries `valid` (the
+  comparison passed its validity rules), `manipulation_check` (passed or failed), and
+  `supported_direction` (`increase`, `decrease`, or `none`): a direction is set only when the
+  comparison is valid, the check passed, the 95% interval excludes zero, and the attrition bound
+  keeps the sign (issue 07's rules). Only a fact with a direction renders a causal sentence:
+  "In this simulator, preferring {subject} {increased|decreased} the win rate by {value}
+  ({interval})." Otherwise it renders "no reliable effect was shown".
 - `strength` — ratings and win rates.
 
-The validator checks: every number in the narrative appears in a cited fact (after rounding as
-displayed); causal verbs ("causes", "makes you win", "improves") appear only in sentences citing an
-`interventional` fact; no fact id is invented.
+A **claim** is `{fact_id, template}`, where the template is one of a fixed set allowed for that
+fact's class. The validator checks: every fact id exists; each template is allowed for its fact;
+the free prose contains no digits, percentages, or causal verbs ("causes", "improves", "makes you
+win", "leads to", …). Because numbers and causal wording come only from rendered claims, prose
+cannot attach a number or a cause to the wrong fact.
 
 ### Narrative step
 
 - Input: `facts.json` and a fixed prompt committed in the repo. No raw games.
-- Output: JSON sections `{id, title, paragraphs:[{text, cites:[fact ids]}]}`.
+- Output: JSON sections `{id, title, paragraphs:[{prose_before, claims:[{fact_id, template}],
+  prose_after}]}`.
 - Cached by hash of facts + prompt + model id under the report directory; regeneration reuses the
   cache. `--no-narrative` skips the step.
 - The model id is a CLI option with a default pinned at implementation time to the latest Claude
@@ -96,8 +104,9 @@ Light and dark themes. Written to `<dir>/report.html`.
 ## Testing Decisions
 
 - Facts are deterministic: byte-identical `facts.json` from the same artifacts.
-- Validator tests: a narrative with a wrong number, an uncited number, an invented fact id, or a
-  causal verb on a descriptive fact is rejected; a correct one passes.
+- Validator tests: an unknown fact id, a template not allowed for its fact, a digit or causal verb
+  in prose, or a causal template on an interventional fact without a direction is rejected; a
+  correct narrative passes and renders its numbers from facts.
 - Narrative step tested with a fake client; no network in tests.
 - HTML test: the page renders every fact id that a chart or citation references; no external URLs.
 
