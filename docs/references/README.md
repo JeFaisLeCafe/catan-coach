@@ -62,7 +62,8 @@ evaluation decision, not merely because it also uses AI.
 
 ## Consequences for the roadmap
 
-1. Build Table Recorder so real games can enter the same lossless replay and review pipeline.
+1. ~~Build Table Recorder~~ Dropped 2026-11-13. Browser games against bots remain the only
+   first-party human games.
 2. Add an evidence-linked Strategy Profile over a game, aggregating exact Plies into understandable
    habits without turning them into fixed rules.
 3. Evaluate future models against a population of policies, strengths, Seats, boards, player

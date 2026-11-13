@@ -117,6 +117,6 @@ and resource coverage—before using recorded games for training.
 
 ## Roadmap consequence
 
-Build Table Recorder next, then add an evidence-linked Strategy Profile on top of recorded and
+Table Recorder was dropped on 2026-11-13. Add an evidence-linked Strategy Profile on top of
 browser-played games. In parallel, define a population evaluation harness before generating the
 next model generation.
