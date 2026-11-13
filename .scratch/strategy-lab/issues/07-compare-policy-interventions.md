@@ -5,7 +5,7 @@ the harness; issue 09 owns the first real sweep.
 
 **Blocked by:** 04, 05, 06
 
-**Status:** ready-for-agent
+**Status:** resolved (shipped in `393a2f8`; corrected 2026-11-13)
 
 ## Read first
 

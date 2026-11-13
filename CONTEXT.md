@@ -95,12 +95,6 @@ Live play with Analysis hidden. The completed game can still be reviewed afterwa
 Live play with Analysis visible. A game may switch between Challenge Mode and Coach Mode
 without changing its Position or history.
 
-**Table Recorder**:
-A local game where one operator enters the Actions and random outcomes for every Seat, mirroring
-a physical game rather than asking the engine to choose those outcomes.
-_Avoid_: solo mode (ambiguous with one player against bots), hot-seat mode (usually means several
-people sharing one device)
-
 ### Thinking
 
 **Search Budget**:

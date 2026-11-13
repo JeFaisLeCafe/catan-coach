@@ -5,7 +5,7 @@ against an Opponent Population made of one repeated Policy.
 
 **Blocked by:** None
 
-**Status:** ready-for-agent
+**Status:** resolved (shipped in `393a2f8`; corrected 2026-11-13)
 
 ## Read first
 

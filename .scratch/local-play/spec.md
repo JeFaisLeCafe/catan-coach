@@ -2,6 +2,10 @@
 
 **Status:** ready-for-agent
 
+> **Scope change 2026-11-13.** The Table Recorder (issue 04, user stories about recording a
+> physical game) is dropped from the roadmap. Its sections below are kept as history and are not
+> requirements. Everything else in this spec has shipped.
+
 ## Problem Statement
 
 Catan Coach can analyze a saved Catanatron game, but there is no convenient way to create one.

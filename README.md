@@ -65,10 +65,10 @@ Catan Coach is a working local coaching app. It can:
 
 The Strategy Lab compares a named Policy with an Opponent Population and reports seat-balanced
 win rates, uncertainty, and descriptive behavior. A small example plan is
-[`docs/examples/strategy-lab.json`](./docs/examples/strategy-lab.json). The completed
-[generation-7 audit](./docs/experiments/generation-7-vs-value/README.md) found 12 wins in 2,000
-games against three `ValueFunctionPlayer` opponents. The settlement/city intervention is specified
-in [`docs/experiments/README.md`](./docs/experiments/README.md) and remains unrun.
+[`docs/examples/strategy-lab.json`](./docs/examples/strategy-lab.json). Every strength run is
+listed in [`docs/experiments/README.md`](./docs/experiments/README.md). The installed
+production-features model won 1,025 of 2,000 games against three `ValueFunctionPlayer`
+opponents ([report](./docs/experiments/production-features/README.md)); generation 7 had won 12.
 
 ```bash
 uv run catan-coach lab run docs/examples/strategy-lab.json --out data/experiments/smoke
@@ -76,8 +76,8 @@ uv run catan-coach lab report data/experiments/smoke
 uv run catan-coach lab compare data/experiments/reference data/experiments/variant
 ```
 
-The bundled model is generation 7. Its provenance, held-out result, and reproduction command are
-recorded in [docs/model.md](./docs/model.md).
+The bundled model is the production-features model. Its provenance, calibration result, and
+reproduction command are recorded in [docs/model.md](./docs/model.md).
 
 ## Model workflow
 

@@ -5,7 +5,7 @@
 
 **Blocked by:** 01, 02, 03
 
-**Status:** ready-for-agent
+**Status:** resolved (shipped in `393a2f8`; corrected 2026-11-13)
 
 ## Read first
 

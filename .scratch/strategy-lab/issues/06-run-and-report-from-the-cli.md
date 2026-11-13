@@ -5,7 +5,7 @@ parallel workers, and report generation.
 
 **Blocked by:** 02, 04, 05
 
-**Status:** ready-for-agent
+**Status:** resolved (shipped in `393a2f8`; corrected 2026-11-13)
 
 ## Read first
 
