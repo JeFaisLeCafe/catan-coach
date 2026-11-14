@@ -208,7 +208,7 @@ def test_alphabeta_depth_round_trips_and_is_rejected_elsewhere(tmp_path: Path) -
     assert restored == frozen_plan
     assert restored.opponent.depth == 2
     assert document["opponent"]["depth"] == 2
-    assert document["candidate"]["depth"] is None
+    assert "depth" not in document["candidate"]
     rejected: tuple[dict[str, object], ...] = (
         {"name": "alphabeta", "kind": "alphabeta"},
         {"name": "alphabeta", "kind": "alphabeta", "depth": 0},
