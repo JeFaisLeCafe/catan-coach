@@ -253,3 +253,20 @@ def test_each_entrant_plays_the_same_number_of_games_per_seat(count: int) -> Non
             for seat in range(4):
                 sat = sum(game.entrants[seat].name == entrant.name for game in played)
                 assert sat == per_seat
+
+
+def test_alphabeta_entrant_keeps_its_depth() -> None:
+    entrants = (*numbered(3), FrozenPolicySpec(name="ab", kind="alphabeta", depth=2))
+    field = make_plan(entrants=entrants)
+    document = field.to_json()
+    assert LeaguePlan.from_json(json.loads(json.dumps(document))) == field
+
+    deeper = make_plan(
+        entrants=(*numbered(3), FrozenPolicySpec(name="ab", kind="alphabeta", depth=3))
+    )
+    assert schedule(field)[0].pairing_key != schedule(deeper)[0].pairing_key
+
+    entrant = document["entrants"][3]  # type: ignore[index]
+    del entrant["depth"]
+    with pytest.raises(ValueError, match="depth"):
+        LeaguePlan.from_json(document)

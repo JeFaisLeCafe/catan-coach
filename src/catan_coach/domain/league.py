@@ -42,6 +42,7 @@ _ENTRANT_FIELDS = {
     "sidecar_path",
     "sidecar_hash",
     "declared_preferences",
+    "depth",
 }
 _RULE_FIELDS = {"vps_to_win", "discard_limit", "friendly_robber", "turn_limit"}
 _PREFERENCE_FIELDS = {"category", "delta"}
@@ -219,6 +220,7 @@ def _pairing_identity(entrant: Entrant) -> dict[str, object]:
         "sidecar_hash": entrant.sidecar_hash,
         "search_simulations": entrant.search_simulations,
         "explore": entrant.explore,
+        "depth": entrant.depth,
         "preferences": [
             [item.category, round(item.delta, 10)] for item in entrant.declared_preferences
         ],
@@ -226,7 +228,7 @@ def _pairing_identity(entrant: Entrant) -> dict[str, object]:
 
 
 def _entrant_json(entrant: Entrant) -> dict[str, object]:
-    return {
+    document: dict[str, object] = {
         "name": entrant.name,
         "kind": entrant.kind,
         "search_simulations": entrant.search_simulations,
@@ -240,6 +242,9 @@ def _entrant_json(entrant: Entrant) -> dict[str, object]:
             for item in entrant.declared_preferences
         ],
     }
+    if entrant.depth is not None:
+        document["depth"] = entrant.depth
+    return document
 
 
 def _entrant(payload: object) -> Entrant:
@@ -264,6 +269,7 @@ def _entrant(payload: object) -> Entrant:
         sidecar_path=_optional_text(document.get("sidecar_path"), "sidecar path"),
         sidecar_hash=_optional_text(document.get("sidecar_hash"), "sidecar hash"),
         declared_preferences=tuple(_preference(item) for item in raw_preferences),
+        depth=None if document.get("depth") is None else _int(document["depth"], "depth"),
     )
 
 
@@ -344,6 +350,8 @@ def _policy_kind(value: object) -> PolicyKind:
         return "model"
     if value == "random":
         return "random"
+    if value == "alphabeta":
+        return "alphabeta"
     raise ValueError(f"unknown Policy kind {value}")
 
 
