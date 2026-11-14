@@ -274,3 +274,10 @@ def test_alphabeta_depth_changes_play_identity() -> None:
 
     assert [game.result_key for game in deeper] != [game.result_key for game in shallow]
     assert [game.pairing_key for game in deeper] != [game.pairing_key for game in shallow]
+
+
+def test_keys_without_depth_match_stores_written_before_alphabeta() -> None:
+    # Computed at c66a429, before the alphabeta kind existed.
+    expected = "882af9aaff07d8c75f13e6edc74463e5d1e2745e5b5a51b5be744240f331bf42"
+    first = schedule(plan())[0]
+    assert (first.result_key, first.pairing_key) == (expected, expected)

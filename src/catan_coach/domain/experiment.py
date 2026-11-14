@@ -569,12 +569,14 @@ def _key(
 
 def _policy_identity(policy: FrozenPolicySpec, *, include_preferences: bool) -> dict[str, object]:
     selected = policy.declared_preferences if include_preferences else ()
-    return {
+    identity: dict[str, object] = {
         "kind": policy.kind,
         "model_hash": policy.model_hash,
         "sidecar_hash": policy.sidecar_hash,
         "search_simulations": policy.search_simulations,
         "explore": policy.explore,
-        "depth": policy.depth,
         "preferences": [[item.category, round(item.delta, 10)] for item in selected],
     }
+    if policy.depth is not None:
+        identity["depth"] = policy.depth
+    return identity

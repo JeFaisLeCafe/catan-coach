@@ -470,7 +470,12 @@ def _build(value: object) -> BuildCategory | None:
 def _dataclass(value: object) -> dict[str, object]:
     if not is_dataclass(value):
         raise TypeError(f"{type(value).__name__} is not a dataclass")
-    return {item.name: _value(getattr(value, item.name)) for item in fields(value)}
+    # An absent alphabeta depth is left out so stores written before it existed still match.
+    return {
+        item.name: _value(getattr(value, item.name))
+        for item in fields(value)
+        if not (item.name == "depth" and getattr(value, item.name) is None)
+    }
 
 
 def _value(value: object) -> object:

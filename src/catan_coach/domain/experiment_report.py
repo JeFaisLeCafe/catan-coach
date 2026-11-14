@@ -1182,5 +1182,10 @@ def _jsonable(value: object) -> object:
     if isinstance(value, tuple):
         return [_jsonable(item) for item in value]
     if is_dataclass(value) and not isinstance(value, type):
-        return {item.name: _jsonable(getattr(value, item.name)) for item in fields(value)}
+        # An absent alphabeta depth is left out so older reports regenerate byte for byte.
+        return {
+            item.name: _jsonable(getattr(value, item.name))
+            for item in fields(value)
+            if not (item.name == "depth" and getattr(value, item.name) is None)
+        }
     raise TypeError(f"cannot serialize {type(value).__name__}")
