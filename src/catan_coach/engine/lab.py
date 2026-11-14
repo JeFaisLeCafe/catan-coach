@@ -56,6 +56,7 @@ _POLICY_FIELDS = {
     "model_path",
     "sidecar_path",
     "preferences",
+    "depth",
 }
 _RULE_FIELDS = {"vps_to_win", "discard_limit", "friendly_robber", "turn_limit"}
 _PREFERENCE_FIELDS = {"category", "delta"}
@@ -266,6 +267,8 @@ def _policy(payload: object, root: Path) -> PolicyConfig:
             raise ValueError("a preference must be an object")
         _unknown(item, _PREFERENCE_FIELDS, "preference")
         declared.append(PolicyPreference(item["category"], item["delta"]))
+    if payload.get("kind") != "alphabeta" and "depth" in payload:
+        raise ValueError("only an alphabeta Policy has a depth")
     return PolicyConfig(
         name=str(payload["name"]),
         kind=payload["kind"],
@@ -274,6 +277,7 @@ def _policy(payload: object, root: Path) -> PolicyConfig:
         model_path=_relative(root, payload.get("model_path")),
         sidecar_path=_relative(root, payload.get("sidecar_path")),
         declared_preferences=tuple(declared),
+        depth=payload.get("depth", None),
     )
 
 
