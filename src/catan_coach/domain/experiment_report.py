@@ -24,6 +24,36 @@ from catan_coach.domain.experiment import (
 _Z = 1.959963984540054
 _BOOTSTRAP_REPLICATES = 10_000
 _DROP_LIMIT = 0.01
+_DELTA_FIELDS: tuple[str, ...] = (
+    "settlements",
+    "cities",
+    "roads",
+    "development_cards",
+    "knights",
+    "offers",
+    "acceptances",
+    "completed_trades",
+    "maritime_trades",
+    "initial_pips",
+    "longest_road_rate",
+    "largest_army_rate",
+)
+_BEHAVIOR_FIELDS: tuple[str, ...] = (
+    *_DELTA_FIELDS,
+    "initial_resources",
+    "adjacent_port_rate",
+    "public_victory_points",
+    "actual_victory_points",
+    "first_build_settlement",
+    "first_build_city",
+    "first_build_road",
+    "first_build_development_card",
+    "first_build_none",
+)
+_BUILD_FIELDS = {
+    "settlement": "settlements",
+    "city": "cities",
+}
 
 Outcome = CompletedGame | DroppedGame
 
@@ -125,6 +155,17 @@ class EffectEstimate:
 
 
 @dataclass(frozen=True, slots=True)
+class ManipulationCheck:
+    """Whether a positive settlement or city preference moved that build count."""
+
+    field: str
+    difference: float
+    lower: float
+    upper: float
+    passed: bool
+
+
+@dataclass(frozen=True, slots=True)
 class VariantComparison:
     name: str
     preferences: tuple[tuple[str, float], ...]
@@ -142,6 +183,9 @@ class VariantComparison:
     terminal_reference: int
     terminal_variant: int
     warnings: tuple[str, ...]
+    behavior_differences: tuple[tuple[str, EffectEstimate], ...] = ()
+    manipulation_check: ManipulationCheck | None = None
+    attrition_bounds_same_sign: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -306,6 +350,7 @@ def compare(
         _require_compatible(reference, variant, reference_schedule, schedules[index])
         compared.append(
             _compare_variant(
+                reference,
                 variant,
                 reference_schedule,
                 _index_schedule(schedules[index]),
@@ -327,6 +372,18 @@ def compare(
 
 def report_to_json(report: ExperimentReport | InterventionReport) -> dict[str, object]:
     return _jsonable(report)  # type: ignore[return-value]
+
+
+def intervention_from_json(payload: object) -> InterventionReport:
+    """Load an Intervention Comparison. Check fields may be absent in older JSON."""
+    data = _json_object(payload, "intervention report")
+    return InterventionReport(
+        _json_string(data.get("reference_name"), "reference_name"),
+        _json_string(data.get("opponent_name"), "opponent_name"),
+        _json_int(data.get("seed"), "seed"),
+        _json_int(data.get("replicates"), "replicates"),
+        tuple(_variant_from_json(item) for item in _json_list(data.get("variants"), "variants")),
+    )
 
 
 def format_report(report: ExperimentReport) -> str:
@@ -469,11 +526,33 @@ def format_comparison(report: InterventionReport) -> str:
             lines.append(f"Behavior change per completed pair: {changes}.")
         else:
             lines.append("Behavior change per completed pair: none.")
+        if variant.behavior_differences:
+            lines.extend(
+                f"- {name}: {effect.difference:+.4f} "
+                f"({effect.lower:+.4f} to {effect.upper:+.4f}, {effect.pairs} pairs)"
+                for name, effect in variant.behavior_differences
+            )
+        else:
+            lines.append("Behavior paired differences: none.")
+        check = variant.manipulation_check
+        if check is None:
+            lines.append("Manipulation check: not applicable.")
+        else:
+            verdict = "passed" if check.passed else "failed"
+            lines.append(
+                f"Manipulation check ({check.field}): {check.difference:+.4f} "
+                f"({check.lower:+.4f} to {check.upper:+.4f}), {verdict}."
+            )
+        if variant.attrition_bounds_same_sign:
+            lines.append("Attrition bounds have the same sign as the estimate.")
+        else:
+            lines.append("Attrition bounds do not have the same sign as the estimate.")
         lines.extend(f"- {warning}" for warning in variant.warnings)
     return "\n".join(lines) + "\n"
 
 
 def _compare_variant(
+    reference: ExperimentPlan,
     variant: ExperimentPlan,
     reference_schedule: dict[str, ScheduledGame],
     variant_schedule: dict[str, ScheduledGame],
@@ -547,9 +626,13 @@ def _compare_variant(
         warnings.append("comparison is not valid for an effect claim")
     if unresolved:
         warnings.append(f"{unresolved} pairing keys are unresolved on at least one side")
+    preferences = tuple(
+        (item.category, item.delta) for item in variant.candidate.declared_preferences
+    )
+    behavior_differences = _behavior_differences(behavior_left, behavior_right, seed)
     return VariantComparison(
         variant.name,
-        tuple((item.category, item.delta) for item in variant.candidate.declared_preferences),
+        preferences,
         len(completed_pairs),
         unresolved,
         valid,
@@ -558,12 +641,19 @@ def _compare_variant(
         lower,
         upper,
         seat_estimates,
-        _behavior_delta(behavior_left, behavior_right),
+        _behavior_deltas(behavior_differences),
         dropped_reference,
         dropped_variant,
         terminal_reference,
         terminal_variant,
         tuple(warnings),
+        behavior_differences,
+        _manipulation_check(
+            preferences,
+            _changed_preferences(reference, variant),
+            behavior_differences,
+        ),
+        _bounds_same_sign(estimate, lower, upper),
     )
 
 
@@ -803,32 +893,261 @@ def _aggregate(profiles: Sequence[BehaviorProfile]) -> BehaviorAggregate:
     )
 
 
-def _behavior_delta(
-    reference: Sequence[BehaviorProfile], variant: Sequence[BehaviorProfile]
-) -> tuple[tuple[str, float], ...]:
+def _behavior_differences(
+    reference: Sequence[BehaviorProfile],
+    variant: Sequence[BehaviorProfile],
+    seed: int,
+) -> tuple[tuple[str, EffectEstimate], ...]:
+    if len(reference) != len(variant):
+        raise ValueError("behavior pairs must line up by pairing key")
     if not reference:
         return ()
-    left = _aggregate(reference)
-    right = _aggregate(variant)
-    names = (
-        "settlements",
-        "cities",
-        "roads",
-        "development_cards",
-        "knights",
-        "offers",
-        "acceptances",
-        "completed_trades",
-        "maritime_trades",
-        "initial_pips",
-        "longest_road_rate",
-        "largest_army_rate",
-    )
+    left = [_behavior_vector(profile) for profile in reference]
+    right = [_behavior_vector(profile) for profile in variant]
+    width = len(left)
     return tuple(
-        (name, float(getattr(right, name) - getattr(left, name)))
-        for name in names
-        if getattr(left, name) is not None and getattr(right, name) is not None
+        (
+            name,
+            _bootstrap(
+                [right[index][field] - left[index][field] for index in range(width)],
+                seed,
+            ),
+        )
+        for field, name in enumerate(_BEHAVIOR_FIELDS)
     )
+
+
+def _behavior_deltas(
+    effects: tuple[tuple[str, EffectEstimate], ...],
+) -> tuple[tuple[str, float], ...]:
+    if not effects:
+        return ()
+    by_name = dict(effects)
+    return tuple((name, by_name[name].difference) for name in _DELTA_FIELDS)
+
+
+def _behavior_vector(profile: BehaviorProfile) -> tuple[float, ...]:
+    counts = profile.counts
+    first = counts.first_build
+    readings = {
+        "settlements": float(counts.settlements),
+        "cities": float(counts.cities),
+        "roads": float(counts.roads),
+        "development_cards": float(counts.development_cards),
+        "knights": float(counts.knights),
+        "offers": float(counts.offers),
+        "acceptances": float(counts.acceptances),
+        "completed_trades": float(counts.completed_trades),
+        "maritime_trades": float(counts.maritime_trades),
+        "initial_pips": float(counts.initial_pips),
+        "longest_road_rate": float(profile.longest_road),
+        "largest_army_rate": float(profile.largest_army),
+        "initial_resources": float(counts.initial_resources),
+        "adjacent_port_rate": float(counts.adjacent_port),
+        "public_victory_points": float(profile.public_victory_points),
+        "actual_victory_points": float(profile.actual_victory_points),
+        "first_build_settlement": float(first == "settlement"),
+        "first_build_city": float(first == "city"),
+        "first_build_road": float(first == "road"),
+        "first_build_development_card": float(first == "development_card"),
+        "first_build_none": float(first is None),
+    }
+    return tuple(readings[name] for name in _BEHAVIOR_FIELDS)
+
+
+def _manipulation_check(
+    preferences: tuple[tuple[str, float], ...],
+    changed: tuple[str, ...],
+    effects: tuple[tuple[str, EffectEstimate], ...],
+) -> ManipulationCheck | None:
+    positive = [
+        category for category, delta in preferences if category in _BUILD_FIELDS and delta > 0
+    ]
+    category: str | None = None
+    if len(positive) == 1:
+        category = positive[0]
+    elif len(changed) == 1 and changed[0] in positive:
+        category = changed[0]
+    if category is None:
+        return None
+    effect = dict(effects)[_BUILD_FIELDS[category]]
+    excludes_zero = effect.lower > 0 or effect.upper < 0
+    return ManipulationCheck(
+        _BUILD_FIELDS[category],
+        effect.difference,
+        effect.lower,
+        effect.upper,
+        effect.difference > 0 and excludes_zero,
+    )
+
+
+def _bounds_same_sign(
+    estimate: EffectEstimate, lower: EffectEstimate, upper: EffectEstimate
+) -> bool:
+    sign = _sign(estimate.difference)
+    return _sign(lower.difference) == sign and _sign(upper.difference) == sign
+
+
+def _sign(value: float) -> int:
+    if value > 0:
+        return 1
+    if value < 0:
+        return -1
+    return 0
+
+
+def _variant_from_json(payload: object) -> VariantComparison:
+    data = _json_object(payload, "variant comparison")
+    if "manipulation_check" not in data or data["manipulation_check"] is None:
+        manipulation = None
+    else:
+        manipulation = _manipulation_from_json(data["manipulation_check"])
+    if "behavior_differences" in data:
+        differences = _behavior_differences_from_json(data["behavior_differences"])
+    else:
+        differences = ()
+    if "attrition_bounds_same_sign" in data:
+        same_sign = _json_bool(data["attrition_bounds_same_sign"], "attrition_bounds_same_sign")
+    else:
+        same_sign = False
+    return VariantComparison(
+        _json_string(data.get("name"), "name"),
+        _named_numbers(data.get("preferences"), "preferences"),
+        _json_int(data.get("completed_pairs"), "completed_pairs"),
+        _json_int(data.get("unresolved_pairs"), "unresolved_pairs"),
+        _json_bool(data.get("valid"), "valid"),
+        _json_string(data.get("claim"), "claim"),
+        _effect_from_json(data.get("estimate"), "estimate"),
+        _effect_from_json(data.get("lower_bound"), "lower_bound"),
+        _effect_from_json(data.get("upper_bound"), "upper_bound"),
+        _seat_effects(data.get("seats")),
+        _named_numbers(data.get("behavior_deltas"), "behavior_deltas"),
+        _json_int(data.get("dropped_reference"), "dropped_reference"),
+        _json_int(data.get("dropped_variant"), "dropped_variant"),
+        _json_int(data.get("terminal_reference"), "terminal_reference"),
+        _json_int(data.get("terminal_variant"), "terminal_variant"),
+        tuple(
+            _json_string(item, "warnings") for item in _json_list(data.get("warnings"), "warnings")
+        ),
+        differences,
+        manipulation,
+        same_sign,
+    )
+
+
+def _manipulation_from_json(payload: object) -> ManipulationCheck:
+    data = _json_object(payload, "manipulation_check")
+    return ManipulationCheck(
+        _json_string(data.get("field"), "manipulation_check.field"),
+        _json_number(data.get("difference"), "manipulation_check.difference"),
+        _json_number(data.get("lower"), "manipulation_check.lower"),
+        _json_number(data.get("upper"), "manipulation_check.upper"),
+        _json_bool(data.get("passed"), "manipulation_check.passed"),
+    )
+
+
+def _behavior_differences_from_json(
+    payload: object,
+) -> tuple[tuple[str, EffectEstimate], ...]:
+    rows = _json_list(payload, "behavior_differences")
+    parsed: list[tuple[str, EffectEstimate]] = []
+    for index, row in enumerate(rows):
+        pair = _json_list(row, f"behavior_differences[{index}]")
+        if len(pair) != 2:
+            raise ValueError(f"behavior_differences[{index}] must have two entries")
+        parsed.append(
+            (
+                _json_string(pair[0], f"behavior_differences[{index}][0]"),
+                _effect_from_json(pair[1], f"behavior_differences[{index}][1]"),
+            )
+        )
+    return tuple(parsed)
+
+
+def _seat_effects(payload: object) -> tuple[tuple[int, EffectEstimate], ...]:
+    rows = _json_list(payload, "seats")
+    parsed: list[tuple[int, EffectEstimate]] = []
+    for index, row in enumerate(rows):
+        pair = _json_list(row, f"seats[{index}]")
+        if len(pair) != 2:
+            raise ValueError(f"seats[{index}] must have two entries")
+        parsed.append(
+            (
+                _json_int(pair[0], f"seats[{index}][0]"),
+                _effect_from_json(pair[1], f"seats[{index}][1]"),
+            )
+        )
+    return tuple(parsed)
+
+
+def _named_numbers(payload: object, label: str) -> tuple[tuple[str, float], ...]:
+    rows = _json_list(payload, label)
+    parsed: list[tuple[str, float]] = []
+    for index, row in enumerate(rows):
+        pair = _json_list(row, f"{label}[{index}]")
+        if len(pair) != 2:
+            raise ValueError(f"{label}[{index}] must have two entries")
+        parsed.append(
+            (
+                _json_string(pair[0], f"{label}[{index}][0]"),
+                _json_number(pair[1], f"{label}[{index}][1]"),
+            )
+        )
+    return tuple(parsed)
+
+
+def _effect_from_json(payload: object, label: str) -> EffectEstimate:
+    data = _json_object(payload, label)
+    return EffectEstimate(
+        _json_int(data.get("pairs"), f"{label}.pairs"),
+        _json_number(data.get("difference"), f"{label}.difference"),
+        _json_number(data.get("lower"), f"{label}.lower"),
+        _json_number(data.get("upper"), f"{label}.upper"),
+    )
+
+
+def _json_object(value: object, label: str) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be a JSON object")
+    mapped: dict[str, object] = {}
+    for key, item in value.items():
+        if not isinstance(key, str):
+            raise ValueError(f"{label} keys must be strings")
+        mapped[key] = item
+    return mapped
+
+
+def _json_list(value: object, label: str) -> list[object]:
+    if not isinstance(value, list):
+        raise ValueError(f"{label} must be an array")
+    return [item for item in value]
+
+
+def _json_string(value: object, label: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{label} must be a string")
+    return value
+
+
+def _json_bool(value: object, label: str) -> bool:
+    if not isinstance(value, bool):
+        raise ValueError(f"{label} must be true or false")
+    return value
+
+
+def _json_int(value: object, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{label} must be an integer")
+    return value
+
+
+def _json_number(value: object, label: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{label} must be a number")
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError(f"{label} must be finite")
+    return number
 
 
 def _behavior_line(aggregate: BehaviorAggregate) -> str:
