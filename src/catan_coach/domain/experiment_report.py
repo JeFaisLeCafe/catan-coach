@@ -79,6 +79,7 @@ class PolicySettings:
     model_hash: str | None
     sidecar_hash: str | None
     preferences: tuple[tuple[str, float], ...]
+    depth: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -387,12 +388,14 @@ def format_report(report: ExperimentReport) -> str:
             "## Provenance",
             (
                 f"{report.candidate.name} kind={report.candidate.kind} "
-                f"search={report.candidate.search_simulations} explore={report.candidate.explore} "
+                f"search={report.candidate.search_simulations} explore={report.candidate.explore}"
+                f"{_depth_text(report.candidate.depth)} "
                 f"model={report.candidate.model_hash} sidecar={report.candidate.sidecar_hash}"
             ),
             (
                 f"{report.opponent.name} kind={report.opponent.kind} "
                 f"search={report.opponent.search_simulations} explore={report.opponent.explore}"
+                f"{_depth_text(report.opponent.depth)}"
             ),
             (
                 f"map={report.map_policy} base_seed={report.base_seed} "
@@ -615,6 +618,8 @@ def _require_compatible(
         mismatches.append("candidate.sidecar_hash")
     if reference.candidate.search_simulations != variant.candidate.search_simulations:
         mismatches.append("candidate.search_simulations")
+    if reference.candidate.depth != variant.candidate.depth:
+        mismatches.append("candidate.depth")
     if reference.candidate.explore != variant.candidate.explore:
         mismatches.append("candidate.explore")
     if reference.candidate.search_simulations > 0 and variant.candidate.declared_preferences:
@@ -721,7 +726,14 @@ def _settings(policy: object) -> PolicySettings:
         policy.model_hash,
         policy.sidecar_hash,
         tuple((item.category, item.delta) for item in policy.declared_preferences),
+        policy.depth,
     )
+
+
+def _depth_text(depth: int | None) -> str:
+    if depth is None:
+        return ""
+    return f" depth={depth}"
 
 
 def _distribution(values: Sequence[int]) -> tuple[tuple[int, int], ...]:

@@ -14,7 +14,7 @@ import random
 from dataclasses import dataclass
 from typing import Literal
 
-PolicyKind = Literal["value", "model", "random"]
+PolicyKind = Literal["value", "model", "random", "alphabeta"]
 PreferenceCategory = Literal["settlement", "city", "road", "development_card", "port"]
 BuildCategory = Literal["settlement", "city", "road", "development_card"]
 MapPolicy = Literal["corpus"]
@@ -85,6 +85,7 @@ class PolicyConfig:
     model_path: str | None = None
     sidecar_path: str | None = None
     declared_preferences: tuple[PolicyPreference, ...] = ()
+    depth: int | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "name", _nonempty(self.name, "Policy name"))
@@ -98,6 +99,7 @@ class PolicyConfig:
             self.sidecar_path,
             None,
             self.declared_preferences,
+            self.depth,
             require_hash=False,
         )
 
@@ -113,6 +115,7 @@ class FrozenPolicySpec:
     sidecar_path: str | None = None
     sidecar_hash: str | None = None
     declared_preferences: tuple[PolicyPreference, ...] = ()
+    depth: int | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "name", _nonempty(self.name, "Policy name"))
@@ -128,6 +131,7 @@ class FrozenPolicySpec:
             self.sidecar_path,
             self.sidecar_hash,
             self.declared_preferences,
+            self.depth,
             require_hash=True,
         )
 
@@ -141,6 +145,7 @@ class FrozenPolicySpec:
             model_hash=self.model_hash,
             sidecar_path=self.sidecar_path,
             sidecar_hash=self.sidecar_hash,
+            depth=self.depth,
         )
 
 
@@ -153,11 +158,17 @@ def _check_policy(
     sidecar_path: str | None,
     sidecar_hash: str | None,
     declared: tuple[PolicyPreference, ...],
+    depth: int | None,
     *,
     require_hash: bool,
 ) -> None:
-    if kind not in ("value", "model", "random"):
+    if kind not in ("value", "model", "random", "alphabeta"):
         raise ValueError(f"unknown Policy kind {kind}")
+    if kind == "alphabeta":
+        if isinstance(depth, bool) or not isinstance(depth, int) or depth < 1:
+            raise ValueError("alphabeta depth must be an integer of at least 1")
+    elif depth is not None:
+        raise ValueError("only an alphabeta Policy has a depth")
     if isinstance(search_simulations, bool) or not isinstance(search_simulations, int):
         raise ValueError("search simulations must be a non-negative integer")
     if search_simulations < 0:
@@ -564,5 +575,6 @@ def _policy_identity(policy: FrozenPolicySpec, *, include_preferences: bool) -> 
         "sidecar_hash": policy.sidecar_hash,
         "search_simulations": policy.search_simulations,
         "explore": policy.explore,
+        "depth": policy.depth,
         "preferences": [[item.category, round(item.delta, 10)] for item in selected],
     }
