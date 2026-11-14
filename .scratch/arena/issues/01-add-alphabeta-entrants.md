@@ -5,10 +5,10 @@ search depth declared in the plan and frozen into provenance.
 
 **Blocked by:** none
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `PolicyKind` accepts `alphabeta`; plan parsing requires an integer `depth` for it and rejects
+- [x] `PolicyKind` accepts `alphabeta`; plan parsing requires an integer `depth` for it and rejects
       it for other kinds
-- [ ] Only `engine/` imports `AlphaBetaPlayer`
-- [ ] A Strategy Lab plan with an `alphabeta` opponent runs and reports
-- [ ] Engine-marked smoke test: two small games complete
+- [x] Only `engine/` imports `AlphaBetaPlayer`
+- [x] A Strategy Lab plan with an `alphabeta` opponent runs and reports
+- [x] Engine-marked smoke test: two small games complete

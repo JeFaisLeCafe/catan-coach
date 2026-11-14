@@ -6,10 +6,10 @@ result for the preferred category, the comparison's validity, and the attrition-
 
 **Blocked by:** none
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `VariantComparison` gains interval and check fields; older JSON still loads
-- [ ] Manipulation check follows issue 09's definition (paired difference positive, interval
+- [x] `VariantComparison` gains interval and check fields; older JSON still loads
+- [x] Manipulation check follows issue 09's definition (paired difference positive, interval
       excludes zero)
-- [ ] Byte-identical regeneration; JSON and Markdown agree
-- [ ] Issue 09's published comparison is regenerated with these fields when it exists
+- [x] Byte-identical regeneration; JSON and Markdown agree
+- [x] Issue 09's published comparison is regenerated with these fields when it exists (done with issue 09)

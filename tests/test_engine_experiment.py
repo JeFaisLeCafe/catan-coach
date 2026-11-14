@@ -13,6 +13,7 @@ from catan_coach.domain.experiment import (
     FrozenPolicySpec,
     GameRules,
     PolicyPreference,
+    ScheduledGame,
     SourceProvenance,
     schedule,
 )
@@ -197,6 +198,51 @@ def test_workers_replay_the_same_documents(tmp_path: Path) -> None:
     assert [path.read_text() for path in left] == [path.read_text() for path in right]
     report = main(["lab", "report", str(first)])
     assert report == 0
+
+
+def test_an_alphabeta_opponent_plays_two_small_games(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import catan_coach.engine.experiment_store as experiment_store
+    import catan_coach.engine.lab as lab
+    from catan_coach.cli import main
+
+    def two_games(plan: ExperimentPlan) -> tuple[ScheduledGame, ...]:
+        return schedule(plan)[:2]
+
+    monkeypatch.setattr(experiment_store, "schedule", two_games)
+    monkeypatch.setattr(lab, "schedule", two_games)
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(
+        json.dumps(
+            {
+                "name": "alphabeta-smoke",
+                "candidate": {"name": "random", "kind": "random"},
+                "opponent": {"name": "alphabeta", "kind": "alphabeta", "depth": 1},
+                "games_per_candidate_seat": 1,
+                "base_seed": 7,
+                "rules": {"turn_limit": 1},
+            }
+        ),
+        encoding="utf-8",
+    )
+    out = tmp_path / "out"
+    assert (
+        main(["lab", "run", str(plan_path), "--out", str(out), "--workers", "1", "--allow-dirty"])
+        == 0
+    )
+    played = sorted((out / "games").glob("*.json"))
+    assert len(played) == 2
+    for path in played:
+        seats = json.loads(path.read_text(encoding="utf-8"))["seats"]
+        assert [seat["policy_name"] for seat in seats].count("alphabeta") == 3
+    frozen = json.loads((out / "plan.json").read_text(encoding="utf-8"))
+    assert frozen["opponent"]["kind"] == "alphabeta"
+    assert frozen["opponent"]["depth"] == 1
+    assert main(["lab", "report", str(out)]) == 0
+    report = capsys.readouterr().out
+    assert "depth=1" in report
+    assert "kind=alphabeta" in report
 
 
 _TRADE_PROBE = """

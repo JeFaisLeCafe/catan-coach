@@ -176,3 +176,48 @@ def test_a_mismatched_result_file_fails(tmp_path: Path) -> None:
         from catan_coach.domain.experiment_report import summarize
 
         summarize(plan, schedule(plan), loaded, ())
+
+
+def test_alphabeta_depth_round_trips_and_is_rejected_elsewhere(tmp_path: Path) -> None:
+    from catan_coach.engine.lab import load_config
+
+    def write(policy: dict[str, object]) -> Path:
+        path = tmp_path / "plan.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "name": "audit",
+                    "candidate": {"name": "random", "kind": "random"},
+                    "opponent": policy,
+                    "games_per_candidate_seat": 1,
+                    "base_seed": 5,
+                }
+            ),
+            encoding="utf-8",
+        )
+        return path
+
+    loaded = load_config(write({"name": "alphabeta", "kind": "alphabeta", "depth": 2}))
+    assert loaded.opponent.depth == 2
+    assert loaded.candidate.depth is None
+    frozen_plan = freeze_config(loaded, SourceProvenance(COMMIT, False))
+    ExperimentStore.open(tmp_path / "run", frozen_plan)
+    restored = load_plan(tmp_path / "run")
+    document = json.loads((tmp_path / "run" / "plan.json").read_text(encoding="utf-8"))
+
+    assert restored == frozen_plan
+    assert restored.opponent.depth == 2
+    assert document["opponent"]["depth"] == 2
+    assert "depth" not in document["candidate"]
+    rejected: tuple[dict[str, object], ...] = (
+        {"name": "alphabeta", "kind": "alphabeta"},
+        {"name": "alphabeta", "kind": "alphabeta", "depth": 0},
+        {"name": "alphabeta", "kind": "alphabeta", "depth": 1.5},
+        {"name": "alphabeta", "kind": "alphabeta", "depth": True},
+        {"name": "value", "kind": "value", "depth": 1},
+        {"name": "random", "kind": "random", "depth": None},
+        {"name": "model", "kind": "model", "model_path": "model.txt", "depth": 1},
+    )
+    for opponent in rejected:
+        with pytest.raises(ValueError, match="depth"):
+            load_config(write(opponent))

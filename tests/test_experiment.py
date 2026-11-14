@@ -250,3 +250,34 @@ def test_results_reject_inconsistent_outcomes() -> None:
     assert dropped.reason == "turn_limit"
     assert not hasattr(dropped.seats[0].profile, "won")
     assert counts().initial_resources == 3
+
+
+def test_alphabeta_depth_is_required_and_exclusive() -> None:
+    assert FrozenPolicySpec(name="alphabeta", kind="alphabeta", depth=2).depth == 2
+    with pytest.raises(ValueError, match="at least 1"):
+        FrozenPolicySpec(name="alphabeta", kind="alphabeta")
+    with pytest.raises(ValueError, match="at least 1"):
+        FrozenPolicySpec(name="alphabeta", kind="alphabeta", depth=0)
+    with pytest.raises(ValueError, match="at least 1"):
+        FrozenPolicySpec(name="alphabeta", kind="alphabeta", depth=True)
+    with pytest.raises(ValueError, match="only an alphabeta"):
+        FrozenPolicySpec(name="value", kind="value", depth=1)
+    with pytest.raises(ValueError, match="only an alphabeta"):
+        FrozenPolicySpec(name="random", kind="random", depth=2)
+    with pytest.raises(ValueError, match="only an alphabeta"):
+        model(depth=1)
+
+
+def test_alphabeta_depth_changes_play_identity() -> None:
+    shallow = schedule(plan(opponent=FrozenPolicySpec(name="alphabeta", kind="alphabeta", depth=1)))
+    deeper = schedule(plan(opponent=FrozenPolicySpec(name="alphabeta", kind="alphabeta", depth=2)))
+
+    assert [game.result_key for game in deeper] != [game.result_key for game in shallow]
+    assert [game.pairing_key for game in deeper] != [game.pairing_key for game in shallow]
+
+
+def test_keys_without_depth_match_stores_written_before_alphabeta() -> None:
+    # Computed at c66a429, before the alphabeta kind existed.
+    expected = "882af9aaff07d8c75f13e6edc74463e5d1e2745e5b5a51b5be744240f331bf42"
+    first = schedule(plan())[0]
+    assert (first.result_key, first.pairing_key) == (expected, expected)

@@ -14,6 +14,7 @@ import lightgbm as lgb
 from catanatron.game import Game
 from catanatron.models.enums import Action
 from catanatron.models.player import Color, Player
+from catanatron.players.minimax import AlphaBetaPlayer
 from catanatron.players.value import ValueFunctionPlayer
 
 from catan_coach.domain.experiment import (
@@ -138,6 +139,10 @@ def _player(policy: FrozenPolicySpec, color: Color) -> Player:
         return ValueFunctionPlayer(color)
     if policy.kind == "random":
         return _RandomPolicy(color)
+    if policy.kind == "alphabeta":
+        if policy.depth is None:
+            raise ValueError(f"{policy.name} has no search depth")
+        return AlphaBetaPlayer(color, AlphaBetaPlayer.Params(depth=policy.depth))
     if policy.kind != "model":
         raise ValueError(f"unknown Policy kind {policy.kind}")
     model = _load_model(policy)

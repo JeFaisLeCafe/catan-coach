@@ -194,6 +194,7 @@ def _freeze_policy(policy: PolicyConfig) -> FrozenPolicySpec:
         sidecar_path=sidecar_path,
         sidecar_hash=sidecar_hash,
         declared_preferences=policy.declared_preferences,
+        depth=policy.depth,
     )
 
 
@@ -363,6 +364,7 @@ def _policy(payload: Mapping[str, object]) -> FrozenPolicySpec:
         sidecar_path=_optional_text(payload["sidecar_path"], "sidecar path"),
         sidecar_hash=_optional_text(payload["sidecar_hash"], "sidecar hash"),
         declared_preferences=preferences,
+        depth=_optional_int(payload.get("depth"), "depth"),
     )
 
 
@@ -440,9 +442,15 @@ def _map_policy(value: object) -> Literal["corpus"]:
 
 
 def _policy_kind(value: object) -> PolicyKind:
-    if value in ("value", "model", "random"):
+    if value in ("value", "model", "random", "alphabeta"):
         return value
     raise ValueError(f"unknown Policy kind {value}")
+
+
+def _optional_int(value: object, label: str) -> int | None:
+    if value is None:
+        return None
+    return _int(value, label)
 
 
 def _category(value: object) -> PreferenceCategory:
@@ -462,7 +470,12 @@ def _build(value: object) -> BuildCategory | None:
 def _dataclass(value: object) -> dict[str, object]:
     if not is_dataclass(value):
         raise TypeError(f"{type(value).__name__} is not a dataclass")
-    return {item.name: _value(getattr(value, item.name)) for item in fields(value)}
+    # An absent alphabeta depth is left out so stores written before it existed still match.
+    return {
+        item.name: _value(getattr(value, item.name))
+        for item in fields(value)
+        if not (item.name == "depth" and getattr(value, item.name) is None)
+    }
 
 
 def _value(value: object) -> object:
