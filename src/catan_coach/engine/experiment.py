@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import itertools
 import json
+import math
 import random
 from collections.abc import Callable
 from importlib.metadata import PackageNotFoundError, version
@@ -45,6 +46,35 @@ class _RandomPolicy(Player):  # type: ignore[misc]
 
     def decide(self, game: Game, playable_actions: list[object]) -> object:
         return game.state.random.choice(playable_actions)
+
+
+class _ReproducibleAlphaBeta(AlphaBetaPlayer):  # type: ignore[misc]
+    """`AlphaBetaPlayer` that plays the same game in every process.
+
+    Upstream searches `game.playable_actions` in the engine's set-backed order,
+    and its simulated copies share the real game's random stream. Here the
+    search walks Actions sorted by label and draws from a private stream
+    seeded by the game seed and Ply, so dice and steals in the real game are
+    untouched by how the search went. The upstream wall-clock cutoff is
+    dropped: the declared depth alone decides how far the search looks.
+    """
+
+    def get_actions(self, game: Game) -> list[Action]:
+        return sorted(super().get_actions(game), key=action_label)
+
+    def decide(self, game: Game, playable_actions: list[Action]) -> Action:
+        real = game.state.random
+        private = random.Random(f"{game.seed}:{len(game.state.action_records)}")
+        game.state.random = private
+        try:
+            return super().decide(game, playable_actions)
+        finally:
+            game.state.random = real
+
+    def alphabeta(  # type: ignore[no-untyped-def]
+        self, game, depth, alpha, beta, deadline, node
+    ):
+        return super().alphabeta(game, depth, alpha, beta, math.inf, node)
 
 
 # Called before each Ply with the number of Plies already played.
@@ -142,7 +172,7 @@ def _player(policy: FrozenPolicySpec, color: Color) -> Player:
     if policy.kind == "alphabeta":
         if policy.depth is None:
             raise ValueError(f"{policy.name} has no search depth")
-        return AlphaBetaPlayer(color, AlphaBetaPlayer.Params(depth=policy.depth))
+        return _ReproducibleAlphaBeta(color, AlphaBetaPlayer.Params(depth=policy.depth))
     if policy.kind != "model":
         raise ValueError(f"unknown Policy kind {policy.kind}")
     model = _load_model(policy)

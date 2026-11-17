@@ -33,6 +33,7 @@ from catan_coach.domain.experiment_report import (
 )
 from catan_coach.engine.experiment_store import (
     ExperimentStore,
+    GameStore,
     PlanMismatch,
     freeze_config,
     load_plan,
@@ -118,7 +119,13 @@ def run_plan(plan_path: Path, out: Path, *, workers: int, allow_dirty: bool) -> 
         raise ValueError("workers must be at least 1")
     config = load_config(plan_path)
     frozen = freeze_config(config, source_provenance(allow_dirty))
-    store = ExperimentStore.open(out, frozen)
+    return play_store(ExperimentStore.open(out, frozen), workers=workers, out=out)
+
+
+def play_store(store: GameStore, *, workers: int, out: Path) -> int:
+    """Play every pending game, retry first failures once, and report the tally."""
+    if workers < 1:
+        raise ValueError("workers must be at least 1")
     pending = list(store.pending())
     started = time.monotonic()
     _play_all(store, pending, workers, started, out)
@@ -129,7 +136,7 @@ def run_plan(plan_path: Path, out: Path, *, workers: int, allow_dirty: bool) -> 
     ]
     _play_all(store, retry, workers, started, out)
     terminal = [failure for failure in store.read_failures() if failure.attempt == 2]
-    scheduled = len(schedule(store.plan))
+    scheduled = len(store.scheduled)
     print(
         f"{scheduled - len(store.pending())}/{scheduled} games, "
         f"{len(terminal)} terminal failures, {time.monotonic() - started:.0f}s, {out}",
@@ -186,7 +193,7 @@ def compare_dirs(
 
 
 def _play_all(
-    store: ExperimentStore,
+    store: GameStore,
     games: list[ScheduledGame],
     workers: int,
     started: float,
@@ -232,9 +239,9 @@ def _play_all(
                     )
                 else:
                     store.write_result(result)
-                done_count = len(schedule(store.plan)) - len(store.pending())
+                done_count = len(store.scheduled) - len(store.pending())
                 print(
-                    f"{done_count}/{len(schedule(store.plan))} games, "
+                    f"{done_count}/{len(store.scheduled)} games, "
                     f"{time.monotonic() - started:.0f}s, {out}",
                     file=sys.stderr,
                 )
@@ -246,11 +253,11 @@ def _play_all(
         pool.shutdown(wait=not interrupted, cancel_futures=interrupted)
 
 
-def _attempts(store: ExperimentStore, result_key: str) -> int:
+def _attempts(store: GameStore, result_key: str) -> int:
     return sum(failure.result_key == result_key for failure in store.read_failures())
 
 
-def _has_result(store: ExperimentStore, result_key: str) -> bool:
+def _has_result(store: GameStore, result_key: str) -> bool:
     return any(result.result_key == result_key for result in store.read_outcomes())
 
 
@@ -318,4 +325,12 @@ def _atomic(path: Path, text: str) -> None:
 
 
 # Re-exported for callers that want the mismatch type without importing the store.
-__all__ = ["DirtyWorktree", "PlanMismatch", "compare_dirs", "load_config", "report_dir", "run_plan"]
+__all__ = [
+    "DirtyWorktree",
+    "PlanMismatch",
+    "compare_dirs",
+    "load_config",
+    "play_store",
+    "report_dir",
+    "run_plan",
+]

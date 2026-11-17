@@ -1,14 +1,17 @@
 """Generate a Corpus of labelled Observations.
 
 Self-play seats one kind of player at the whole table. A replayed Corpus
-re-plays a stored Strategy Experiment, a candidate against an opponent Policy.
+re-plays a stored Strategy Experiment, or an Arena league. Experiment games
+are keyed by seed. League games are keyed by game id, because the four
+rotations of a block share a seed.
 """
 
 from __future__ import annotations
 
 import hashlib
+import re
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -33,8 +36,10 @@ from catan_coach.domain.experiment import (
     ScheduledGame,
     schedule,
 )
+from catan_coach.domain.league import Entrant, LeaguePlan, league_plan_sha256, scheduled_games
 from catan_coach.domain.manifest import (
     MANIFEST_NAME,
+    CorpusEntrant,
     CorpusManifest,
     PlayerKind,
     training_refusal,
@@ -51,6 +56,9 @@ from catan_coach.models.gbdt import GbdtModel, calibration_sidecar
 COLORS = (Color.RED, Color.BLUE, Color.WHITE, Color.ORANGE)
 _GAMES_DIR = "games"
 _DROPPED_DIR = "dropped"
+_LEAGUE_GAME_ID = re.compile(r"^c(\d+)-b(\d+)-r([0-3])$")
+# Block index stays below this so a cycle cannot collide with the next one.
+_MAX_LEAGUE_BLOCK = 1_000_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,7 +164,7 @@ def read_corpus(output_dir: Path | str) -> Corpus:
     frame = pd.concat((pd.read_parquet(path) for path in files), ignore_index=True)
     observations = np.asarray(frame["observation"].to_list(), dtype=np.float64)
     return Corpus(
-        game_ids=frame["game_id"].to_numpy(dtype=np.int64),
+        game_ids=_game_ids(frame["game_id"]),
         plies=frame["ply"].to_numpy(dtype=np.int32),
         seats=np.asarray(frame["seat"].to_numpy(), dtype=np.str_),
         splits=np.asarray(frame["split"].to_numpy(), dtype=np.str_),
@@ -205,7 +213,55 @@ def _has_recorded_games(root: Path) -> bool:
     if games.is_dir() and any(games.glob("*.parquet")):
         return True
     dropped = root / _DROPPED_DIR
-    return dropped.is_dir() and any(path.name.isdigit() for path in dropped.iterdir())
+    return dropped.is_dir() and any(_is_saved_record(path) for path in dropped.iterdir())
+
+
+def _is_saved_record(path: Path) -> bool:
+    name = path.name
+    return path.is_file() and not name.startswith(".") and not name.endswith(".tmp")
+
+
+def _recorded_keys(root: Path) -> set[str]:
+    games = root / _GAMES_DIR
+    keys = {path.stem for path in games.glob("*.parquet")} if games.is_dir() else set()
+    dropped = root / _DROPPED_DIR
+    if dropped.is_dir():
+        keys.update(path.name for path in dropped.iterdir() if _is_saved_record(path))
+    return keys
+
+
+def _game_ids(column: pd.Series) -> np.ndarray:
+    if pd.api.types.is_integer_dtype(column):
+        return np.asarray(column.to_numpy(dtype=np.int64))
+    return np.asarray([_corpus_game_number(value) for value in column.tolist()], dtype=np.int64)
+
+
+def _corpus_game_number(value: object) -> int:
+    """Integer id for a seed, or for a league game id `c{cycle}-b{block}-r{rotation}`."""
+    if isinstance(value, bool):
+        raise ValueError(f"Corpus game id {value} is not a seed or a league game")
+    if isinstance(value, (int, np.integer)):
+        return int(value)
+    text = str(value)
+    if text.isdigit():
+        return int(text)
+    match = _LEAGUE_GAME_ID.fullmatch(text)
+    if match is None:
+        raise ValueError(f"Corpus game id {text} is not a seed or a league game")
+    cycle = int(match.group(1))
+    block = int(match.group(2))
+    if block >= _MAX_LEAGUE_BLOCK:
+        raise ValueError(f"league block {block} does not fit in a Corpus game id")
+    return cycle * 10_000_000 + block * 10 + int(match.group(3))
+
+
+def _block_key(game_id: str) -> str:
+    match = _LEAGUE_GAME_ID.fullmatch(game_id)
+    if match is None:
+        raise ValueError(
+            f"league game id must be c{{cycle}}-b{{block}}-r{{rotation}}, not {game_id}"
+        )
+    return f"c{match.group(1)}-b{match.group(2)}"
 
 
 def _file_sha256(path: Path) -> str:
@@ -334,7 +390,7 @@ def _load_model(model_path: str) -> GbdtModel:
 
 
 def _rows_to_frame(
-    game_id: int,
+    game_id: int | str,
     split: Split,
     winner: str,
     samples: list[tuple[int, str, np.ndarray]],
@@ -357,7 +413,7 @@ def _rows_to_frame(
 def _summarize(root: Path) -> CorpusSummary:
     dropped_dir = root / _DROPPED_DIR
     dropped = (
-        len([path for path in dropped_dir.iterdir() if path.name.isdigit()])
+        len([path for path in dropped_dir.iterdir() if _is_saved_record(path)])
         if dropped_dir.exists()
         else 0
     )
@@ -378,7 +434,7 @@ def _summarize(root: Path) -> CorpusSummary:
         won = frame.loc[frame["won"] == 1]
         if won.empty:
             continue
-        winners[int(won["game_id"].iloc[0])] = str(won["seat"].iloc[0])
+        winners[_corpus_game_number(won["game_id"].iloc[0])] = str(won["seat"].iloc[0])
     played = len(winners)
     win_rate = dict(empty_rates)
     if played:
@@ -404,6 +460,9 @@ class _ReplayJob:
     output_dir: str
     base_seed: int
     validation_fraction: float
+    record_key: str
+    split_key: int | str
+    row_id: int | str
 
 
 def replay_experiment_corpus(
@@ -457,10 +516,7 @@ def replay_experiment_corpus(
     (root / _GAMES_DIR).mkdir(parents=True, exist_ok=True)
     (root / _DROPPED_DIR).mkdir(parents=True, exist_ok=True)
     _bind_manifest(root, invocation)
-    finished = {int(path.stem) for path in (root / _GAMES_DIR).glob("*.parquet")}
-    already_dropped = {
-        int(path.name) for path in (root / _DROPPED_DIR).iterdir() if path.name.isdigit()
-    }
+    recorded = _recorded_keys(root)
     jobs = [
         _ReplayJob(
             scheduled=game,
@@ -469,19 +525,105 @@ def replay_experiment_corpus(
             output_dir=str(root),
             base_seed=plan.base_seed,
             validation_fraction=validation_fraction,
+            record_key=f"{game.seed:05d}",
+            split_key=game.seed,
+            row_id=game.seed,
         )
         for game in scheduled
-        if game.seed not in finished and game.seed not in already_dropped
+        if f"{game.seed:05d}" not in recorded
     ]
-    if workers == 1:
-        for job in jobs:
-            _replay_and_persist(job)
-    elif jobs:
-        with ProcessPoolExecutor(max_workers=workers) as pool:
-            list(pool.map(_replay_and_persist, jobs))
+    _run_replay_jobs(jobs, workers)
     summary = _summarize(root)
     _write_manifest(root, invocation.with_outcomes(summary.games_played, summary.games_dropped))
     return summary
+
+
+def replay_league_corpus(
+    league_dir: Path | str,
+    output_dir: Path | str,
+    *,
+    model_paths: Mapping[str, Path] | None = None,
+    ply_stride: int = 12,
+    workers: int = 1,
+    validation_fraction: float = DEFAULT_VALIDATION_FRACTION,
+) -> CorpusSummary:
+    """Replay a stored Arena league into a Corpus.
+
+    Every Seat is sampled and labelled with whether that Seat won. Games and
+    files are keyed by game id, so the four same-seed rotations of a block all
+    survive. The train/validation draw is by block (`c{cycle}-b{block}`), from
+    the plan's base seed. A game is written only after its winner, Ply count,
+    and Turn count match the store. Model Entrants keep their frozen files
+    when those files still hash to the frozen hashes; `model_paths` rebinds an
+    Entrant by name, and that file must hash to the frozen model.
+    """
+    if ply_stride < 1:
+        raise ValueError("ply_stride must be at least 1")
+    if workers < 1:
+        raise ValueError("workers must be at least 1")
+    from catan_coach.engine.arena import LeagueStore
+
+    store = LeagueStore.load(Path(league_dir))
+    plan = store.plan
+    rebound = _rebind_league(plan, model_paths)
+    scheduled = scheduled_games(rebound, store.source)
+    expected = _league_outcomes(store.read_outcomes(), scheduled)
+    revision, dirty = _git_identity()
+    invocation = CorpusManifest(
+        player_kind="mixed",
+        model_sha256="",
+        search_simulations=0,
+        exploration=False,
+        ply_stride=ply_stride,
+        base_seed=plan.base_seed,
+        requested_games=len(scheduled),
+        validation_fraction=validation_fraction,
+        max_turns=plan.rules.turn_limit,
+        git_revision=revision,
+        dirty_tree=dirty,
+        games_finished=0,
+        games_dropped=0,
+        drop_rate=0.0,
+        opponent="",
+        league_name=plan.name,
+        league_plan_sha256=league_plan_sha256(plan),
+        entrants=tuple(_corpus_entrant(entrant) for entrant in plan.entrants),
+    )
+    root = Path(output_dir)
+    (root / _GAMES_DIR).mkdir(parents=True, exist_ok=True)
+    (root / _DROPPED_DIR).mkdir(parents=True, exist_ok=True)
+    _bind_manifest(root, invocation)
+    recorded = _recorded_keys(root)
+    jobs = [
+        _ReplayJob(
+            scheduled=game,
+            expected=expected[game.result_key],
+            ply_stride=ply_stride,
+            output_dir=str(root),
+            base_seed=plan.base_seed,
+            validation_fraction=validation_fraction,
+            record_key=game.result_key,
+            split_key=_block_key(game.result_key),
+            row_id=game.result_key,
+        )
+        for game in scheduled
+        if game.result_key not in recorded
+    ]
+    _run_replay_jobs(jobs, workers)
+    summary = _summarize(root)
+    _write_manifest(root, invocation.with_outcomes(summary.games_played, summary.games_dropped))
+    return summary
+
+
+def _run_replay_jobs(jobs: Sequence[_ReplayJob], workers: int) -> None:
+    if not jobs:
+        return
+    if workers == 1:
+        for job in jobs:
+            _replay_and_persist(job)
+        return
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        list(pool.map(_replay_and_persist, jobs))
 
 
 def _rebind_candidate(plan: ExperimentPlan, model_path: Path) -> ExperimentPlan:
@@ -539,16 +681,90 @@ def _replay_and_persist(job: _ReplayJob) -> None:
     result = play_scheduled_game(job.scheduled, observe)
     _require_same_game(result, job.expected)
     root = Path(job.output_dir)
-    seed = job.scheduled.seed
     if isinstance(result, DroppedGame):
-        (root / _DROPPED_DIR / f"{seed:05d}").write_text("")
+        (root / _DROPPED_DIR / job.record_key).write_text("")
         return
     winner = Color(result.seats[result.winner].seat_name).name
-    split = split_for_game(seed, seed=job.base_seed, validation_fraction=job.validation_fraction)
-    dest = root / _GAMES_DIR / f"{seed:05d}.parquet"
+    split = split_for_game(
+        job.split_key, seed=job.base_seed, validation_fraction=job.validation_fraction
+    )
+    dest = root / _GAMES_DIR / f"{job.record_key}.parquet"
     tmp = dest.with_name(f"{dest.name}.tmp")
-    _rows_to_frame(seed, split, winner, samples, seed=seed).to_parquet(tmp)
+    _rows_to_frame(job.row_id, split, winner, samples, seed=job.scheduled.seed).to_parquet(tmp)
     tmp.replace(dest)
+
+
+def _league_outcomes(
+    stored: Sequence[CompletedGame | DroppedGame],
+    scheduled: Sequence[ScheduledGame],
+) -> dict[str, CompletedGame | DroppedGame]:
+    by_key = {result.result_key: result for result in stored}
+    outcomes: dict[str, CompletedGame | DroppedGame] = {}
+    for game in scheduled:
+        result = by_key.get(game.result_key)
+        if result is None:
+            raise ValueError(f"stored league has no result for {game.result_key}")
+        if result.seed != game.seed or result.candidate_seat != game.candidate_seat:
+            raise ReplayMismatch(f"stored result {game.result_key} is not seed {game.seed}")
+        outcomes[game.result_key] = result
+    if len(by_key) != len(scheduled):
+        raise ValueError("stored league holds results outside its schedule")
+    return outcomes
+
+
+def _rebind_league(plan: LeaguePlan, model_paths: Mapping[str, Path] | None) -> LeaguePlan:
+    overrides = dict(model_paths or {})
+    known = {entrant.name for entrant in plan.entrants}
+    unknown = sorted(set(overrides) - known)
+    if unknown:
+        raise ValueError(f"unknown Entrant {unknown[0]}")
+    return replace(
+        plan,
+        entrants=tuple(
+            _rebind_entrant(entrant, overrides.get(entrant.name)) for entrant in plan.entrants
+        ),
+    )
+
+
+def _rebind_entrant(entrant: Entrant, override: Path | None) -> Entrant:
+    if entrant.kind != "model":
+        if override is not None:
+            raise ValueError(f"{entrant.name} is not a model Entrant")
+        return entrant
+    if entrant.model_path is None or entrant.model_hash is None:
+        raise ValueError(f"{entrant.name} has no frozen model")
+    model_file = Path(override) if override is not None else Path(entrant.model_path)
+    if not model_file.is_file():
+        raise ValueError(f"missing model file {model_file}")
+    if _file_sha256(model_file) != entrant.model_hash:
+        raise ValueError(f"{model_file} is not the frozen model for {entrant.name}")
+    sidecar_path = entrant.sidecar_path
+    if entrant.sidecar_hash is not None:
+        if sidecar_path is None:
+            raise ValueError(f"{entrant.name} has a sidecar hash and no sidecar path")
+        # An overridden model brings its sidecar along, as the experiment replay does.
+        sidecar = calibration_sidecar(model_file) if override is not None else Path(sidecar_path)
+        if not sidecar.is_file() or _file_sha256(sidecar) != entrant.sidecar_hash:
+            raise ValueError(f"{sidecar} is not the frozen sidecar for {entrant.name}")
+        sidecar_path = str(sidecar.resolve())
+    return replace(
+        entrant,
+        model_path=str(model_file.resolve()),
+        sidecar_path=sidecar_path,
+    )
+
+
+def _corpus_entrant(entrant: Entrant) -> CorpusEntrant:
+    return CorpusEntrant(
+        name=entrant.name,
+        kind=entrant.kind,
+        search_simulations=entrant.search_simulations,
+        explore=entrant.explore,
+        model_hash=entrant.model_hash or "",
+        sidecar_hash=entrant.sidecar_hash or "",
+        depth=entrant.depth,
+        preferences=tuple((item.category, item.delta) for item in entrant.declared_preferences),
+    )
 
 
 def _require_same_game(

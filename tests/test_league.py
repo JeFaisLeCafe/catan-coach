@@ -270,3 +270,19 @@ def test_alphabeta_entrant_keeps_its_depth() -> None:
     del entrant["depth"]
     with pytest.raises(ValueError, match="depth"):
         LeaguePlan.from_json(document)
+
+
+def test_scheduled_games_key_each_rotation_by_its_game_id() -> None:
+    from catan_coach.domain.experiment import SourceProvenance
+    from catan_coach.domain.league import scheduled_games
+
+    plan = make_plan(entrants=numbered(5), cycles=2)
+    source = SourceProvenance("e" * 40, False)
+    games = scheduled_games(plan, source)
+    league = schedule(plan)
+    assert [game.result_key for game in games] == [game.game_id for game in league]
+    assert len({game.result_key for game in games}) == len(games)
+    assert [game.policies for game in games] == [game.entrants for game in league]
+    assert [game.pairing_key for game in games] == [game.pairing_key for game in league]
+    assert {game.source for game in games} == {source}
+    assert len({game.seed for game in games[:4]}) == 1

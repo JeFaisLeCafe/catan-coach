@@ -26,7 +26,8 @@ _CALIBRATE = "calibrate"
 _REPORT = "report"
 _PLAY = "play"
 _LAB = "lab"
-_SUBCOMMANDS = {_ANALYZE, _CORPUS, _TRAIN, _ADOPT, _CALIBRATE, _REPORT, _PLAY, _LAB}
+_ARENA = "arena"
+_SUBCOMMANDS = {_ANALYZE, _CORPUS, _TRAIN, _ADOPT, _CALIBRATE, _REPORT, _PLAY, _LAB, _ARENA}
 
 
 _NEAR_TIE_LOSS = 0.01
@@ -193,7 +194,34 @@ def main(argv: Sequence[str] | None = None) -> int:
     lab_compare.add_argument("--json", type=Path)
     lab_compare.add_argument("--markdown", type=Path)
 
+    arena_parser = subparsers.add_parser(_ARENA, help="run, report, or replay an Arena league")
+    arena_commands = arena_parser.add_subparsers(dest="arena_command", required=True)
+    arena_run = arena_commands.add_parser("run", help="play or resume a league plan")
+    arena_run.add_argument("plan", type=Path)
+    arena_run.add_argument("--out", type=Path, required=True)
+    arena_run.add_argument("--workers", type=int, default=1)
+    arena_run.add_argument("--allow-dirty", action="store_true")
+    arena_report = arena_commands.add_parser("report", help="summarize a league directory")
+    arena_report.add_argument("league", type=Path)
+    arena_report.add_argument("--json", type=Path)
+    arena_report.add_argument("--markdown", type=Path)
+    arena_corpus = arena_commands.add_parser(
+        "corpus", help="replay a league into a winner-labelled Corpus"
+    )
+    arena_corpus.add_argument("league", type=Path)
+    arena_corpus.add_argument("--out", type=Path, required=True)
+    arena_corpus.add_argument("--ply-stride", type=int, default=12)
+    arena_corpus.add_argument("--workers", type=int, default=1)
+    arena_corpus.add_argument(
+        "--model",
+        action="append",
+        default=[],
+        metavar="ENTRANT_NAME=PATH",
+        help="rebind a model Entrant to a file that hashes to its frozen model",
+    )
     args = parser.parse_args(args_list)
+    if args.command == _ARENA:
+        return _run_arena(args)
     if args.command == _LAB:
         return _run_lab(args)
     if args.command == _CORPUS:
@@ -230,6 +258,51 @@ def _run_lab(args: argparse.Namespace) -> int:
     except (DirtyWorktree, PlanMismatch, ValueError) as error:
         print(error, file=sys.stderr)
         return 1
+
+
+def _run_arena(args: argparse.Namespace) -> int:
+    if args.arena_command == "corpus":
+        return _run_arena_corpus(args)
+    # Lazy: the engine and its pool load only when an arena command runs.
+    from catan_coach.engine.arena import DirtyWorktree, PlanMismatch, report_league, run_league
+
+    try:
+        if args.arena_command == "report":
+            return report_league(args.league, json_path=args.json, markdown_path=args.markdown)
+        return run_league(args.plan, args.out, workers=args.workers, allow_dirty=args.allow_dirty)
+    except (DirtyWorktree, PlanMismatch, ValueError) as error:
+        print(error, file=sys.stderr)
+        return 1
+
+
+def _run_arena_corpus(args: argparse.Namespace) -> int:
+    from catan_coach.engine.corpus import replay_league_corpus
+
+    try:
+        summary = replay_league_corpus(
+            args.league,
+            args.out,
+            model_paths=_model_overrides(args.model),
+            ply_stride=args.ply_stride,
+            workers=args.workers,
+        )
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return 1
+    print(format_summary(summary))
+    return 0
+
+
+def _model_overrides(items: Sequence[str]) -> dict[str, Path]:
+    overrides: dict[str, Path] = {}
+    for item in items:
+        name, separator, raw = item.partition("=")
+        if separator != "=" or not name or not raw:
+            raise ValueError(f"--model must be ENTRANT_NAME=PATH, not {item}")
+        if name in overrides:
+            raise ValueError(f"Entrant {name} is rebound twice")
+        overrides[name] = Path(raw)
+    return overrides
 
 
 def _run_analyze(args: argparse.Namespace) -> int:

@@ -78,8 +78,8 @@ def load_plan(path: Path) -> ExperimentPlan:
 def freeze_config(config: ExperimentConfig, source: SourceProvenance) -> ExperimentPlan:
     return ExperimentPlan(
         name=config.name,
-        candidate=_freeze_policy(config.candidate),
-        opponent=_freeze_policy(config.opponent),
+        candidate=freeze_policy(config.candidate),
+        opponent=freeze_policy(config.opponent),
         games_per_candidate_seat=config.games_per_candidate_seat,
         base_seed=config.base_seed,
         source=source,
@@ -89,18 +89,26 @@ def freeze_config(config: ExperimentConfig, source: SourceProvenance) -> Experim
     )
 
 
-class ExperimentStore:
-    def __init__(self, path: Path, plan: ExperimentPlan) -> None:
-        self.path = path
-        self.plan = plan
+class GameStore:
+    """One result file per scheduled game, and up to two failure files each.
 
-    @classmethod
-    def open(cls, path: Path, plan: ExperimentPlan) -> ExperimentStore:
+    The store does not know which plan produced its schedule. Subclasses
+    freeze that plan beside the games.
+    """
+
+    def __init__(self, path: Path, scheduled: Sequence[ScheduledGame]) -> None:
+        self.path = path
+        self.scheduled = tuple(scheduled)
+        self._keys = frozenset(game.result_key for game in self.scheduled)
+        if len(self._keys) != len(self.scheduled):
+            raise ValueError("scheduled games must have unique result keys")
+
+    @staticmethod
+    def _freeze(path: Path, filename: str, document: Mapping[str, object]) -> None:
         path.mkdir(parents=True, exist_ok=True)
         (path / "games").mkdir(exist_ok=True)
         (path / "failures").mkdir(exist_ok=True)
-        plan_path = path / "plan.json"
-        document = _plan_document(plan)
+        plan_path = path / filename
         if plan_path.exists():
             stored = json.loads(plan_path.read_text(encoding="utf-8"))
             mismatch = _first_mismatch(stored, document)
@@ -108,10 +116,9 @@ class ExperimentStore:
                 raise PlanMismatch(f"frozen plan differs at {mismatch}")
         else:
             _write_json(plan_path, document)
-        return cls(path, plan)
 
     def pending(self, games: Sequence[ScheduledGame] | None = None) -> tuple[ScheduledGame, ...]:
-        scheduled = tuple(games) if games is not None else schedule(self.plan)
+        scheduled = tuple(games) if games is not None else self.scheduled
         done = {game.result_key for game in self.read_outcomes()}
         terminal = {failure.result_key for failure in self.read_failures() if failure.attempt == 2}
         return tuple(
@@ -121,7 +128,7 @@ class ExperimentStore:
         )
 
     def write_result(self, result: CompletedGame | DroppedGame) -> None:
-        if result.result_key not in {game.result_key for game in schedule(self.plan)}:
+        if result.result_key not in self._keys:
             raise ValueError(f"result {result.result_key} is not in this plan")
         destination = self.path / "games" / f"{result.result_key}.json"
         _write_json(destination, _result_document(result))
@@ -171,7 +178,18 @@ class ExperimentStore:
         return tuple(failures)
 
 
-def _freeze_policy(policy: PolicyConfig) -> FrozenPolicySpec:
+class ExperimentStore(GameStore):
+    def __init__(self, path: Path, plan: ExperimentPlan) -> None:
+        super().__init__(path, schedule(plan))
+        self.plan = plan
+
+    @classmethod
+    def open(cls, path: Path, plan: ExperimentPlan) -> ExperimentStore:
+        cls._freeze(path, "plan.json", _plan_document(plan))
+        return cls(path, plan)
+
+
+def freeze_policy(policy: PolicyConfig) -> FrozenPolicySpec:
     model_hash = None
     sidecar_hash = None
     model_path = policy.model_path
