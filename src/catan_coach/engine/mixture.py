@@ -40,6 +40,8 @@ def iter_validation_games(paths: Sequence[Path | str]) -> Iterator[ValidationGam
     Train games are skipped before their Observations are read. Two Corpora
     keep distinct games even when they reuse a game id.
     """
+    from catan_coach.engine.corpus import _corpus_game_number
+
     files = _corpus_files(paths)
     for index, (corpus_index, path) in enumerate(files, start=1):
         split = pd.read_parquet(path, columns=["split"])
@@ -52,7 +54,7 @@ def iter_validation_games(paths: Sequence[Path | str]) -> Iterator[ValidationGam
         for _game_id, rows in part.groupby("game_id", sort=False):
             yield ValidationGame(
                 corpus_index=corpus_index,
-                game_id=int(rows["game_id"].to_numpy(dtype=np.int64)[0]),
+                game_id=_corpus_game_number(rows["game_id"].iloc[0]),
                 features=np.asarray(rows["observation"].to_list(), dtype=np.float32),
                 won=rows["won"].to_numpy(dtype=np.float64),
             )
@@ -120,6 +122,8 @@ def _game_files(paths: Sequence[Path | str]) -> list[Path]:
 
 
 def _measure(files: Sequence[Path]) -> tuple[int, int, int, int, int]:
+    from catan_coach.engine.corpus import _corpus_game_number
+
     train_rows = 0
     validation_rows = 0
     games: set[tuple[int, int]] = set()
@@ -135,7 +139,7 @@ def _measure(files: Sequence[Path]) -> tuple[int, int, int, int, int]:
         train_rows += int(train.sum())
         validation_rows += int(validation.sum())
         for game_id in frame.loc[train | validation, "game_id"].unique():
-            games.add((source, int(game_id)))
+            games.add((source, _corpus_game_number(game_id)))
         seats.update(str(seat) for seat in frame["seat"].unique())
         if (source + 1) % 500 == 0:
             print(f"Measured {source + 1} of {len(files)} games", flush=True)

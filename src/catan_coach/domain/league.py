@@ -176,6 +176,14 @@ def schedule(plan: LeaguePlan) -> tuple[LeagueGame, ...]:
     return tuple(games)
 
 
+def league_plan_sha256(plan: LeaguePlan) -> str:
+    """sha256 of the plan's canonical JSON, including frozen paths and hashes."""
+    encoded = json.dumps(
+        plan.to_json(), sort_keys=True, separators=(",", ":"), allow_nan=False
+    ).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def scheduled_games(plan: LeaguePlan, source: SourceProvenance) -> tuple[ScheduledGame, ...]:
     """The league schedule as Strategy Lab games, so its store and runner play them.
 

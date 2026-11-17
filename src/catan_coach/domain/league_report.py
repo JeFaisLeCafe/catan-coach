@@ -70,7 +70,6 @@ JSON object:
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -94,7 +93,7 @@ from catan_coach.domain.experiment_report import (
     _behavior_vector,
     _jsonable,
 )
-from catan_coach.domain.league import LeagueGame, LeaguePlan
+from catan_coach.domain.league import LeagueGame, LeaguePlan, league_plan_sha256
 from catan_coach.domain.rating import (
     BOOTSTRAP_REPLICATES,
     BOOTSTRAP_SEED,
@@ -195,8 +194,8 @@ def canonical_plan_json(plan: LeaguePlan) -> str:
 
 
 def plan_hash(plan: LeaguePlan) -> str:
-    """SHA-256 hex digest of :func:`canonical_plan_json`."""
-    return hashlib.sha256(canonical_plan_json(plan).encode("utf-8")).hexdigest()
+    """SHA-256 hex digest of :func:`canonical_plan_json`; the hash a league Corpus records."""
+    return league_plan_sha256(plan)
 
 
 def summarize_league(

@@ -11,6 +11,10 @@ class TestSplitByGame:
         second = split_for_game(7, seed=13)
 
         assert first == second
+        assert first == split_for_game("7", seed=13)
+
+    def test_a_block_id_is_one_split(self) -> None:
+        assert split_for_game("c0-b0", seed=200_000) == split_for_game("c0-b0", seed=200_000)
 
     def test_a_different_seed_can_move_the_same_game(self) -> None:
         splits = {split_for_game(0, seed=seed) for seed in range(50)}
