@@ -422,3 +422,25 @@ def test_an_alphabeta_game_replays_identically_in_any_process() -> None:
         assert completed.returncode == 0, completed.stderr
         outputs.add(completed.stdout)
     assert len(outputs) == 1
+
+
+def test_an_alphabeta_choice_does_not_depend_on_the_clock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import itertools
+
+    import catanatron.players.minimax as minimax
+
+    from catan_coach.engine.experiment import _player
+    from catan_coach.engine.position import action_label
+
+    def choose() -> str:
+        game = Game([SimplePlayer(color) for color in (Color.RED, Color.BLUE)], seed=3)
+        player = _player(FrozenPolicySpec("ab", "alphabeta", depth=1), game.state.current_color())
+        actions = sorted(game.playable_actions, key=action_label)
+        return action_label(player.decide(game, actions))
+
+    unhurried = choose()
+    ticks = itertools.count(step=1_000)
+    monkeypatch.setattr(minimax.time, "time", lambda: float(next(ticks)))
+    assert choose() == unhurried
