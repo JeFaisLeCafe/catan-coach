@@ -3,10 +3,11 @@
 The parquet rows do not record the player. This manifest does. Training and
 calibration refuse a missing manifest, and they refuse a drop rate above 1%.
 
-A `mixed` Corpus is one candidate Seat against an opponent Policy in the
-other Seats, replayed from a stored Strategy Experiment. It is not self-play,
-and a manifest cannot describe it as self-play: model self-play always
-explores, so a `model` manifest with exploration off is refused.
+A `mixed` Corpus is either one candidate Seat against an opponent Policy,
+replayed from a stored Strategy Experiment, or an Arena league. A league
+records its plan hash and every Entrant. It is not self-play, and a manifest
+cannot describe a mixed table as self-play: model self-play always explores,
+so a `model` manifest with exploration off is refused.
 """
 
 from __future__ import annotations
@@ -43,8 +44,80 @@ _FIELDS = (
 )
 # Only a mixed table names an opponent. Self-play manifests keep their shape.
 _MIXED_FIELDS = (*_FIELDS, "opponent")
+# A league Corpus adds these. Older manifests omit them.
+_LEAGUE_FIELDS = ("league_name", "league_plan_sha256", "entrants")
+_ENTRANT_FIELDS = {
+    "name",
+    "kind",
+    "search_simulations",
+    "explore",
+    "model_hash",
+    "sidecar_hash",
+    "depth",
+    "preferences",
+}
+_PREFERENCE_FIELDS = {"category", "delta"}
+_ENTRANT_KINDS = frozenset({"value", "model", "random", "alphabeta"})
+_PREFERENCE_CATEGORIES = frozenset({"settlement", "city", "road", "development_card", "port"})
 
 _SHA256_HEX = frozenset("0123456789abcdef")
+
+
+@dataclass(frozen=True, slots=True)
+class CorpusEntrant:
+    """One frozen Entrant recorded on a league Corpus, without its file paths."""
+
+    name: str
+    kind: str
+    search_simulations: int = 0
+    explore: bool = False
+    model_hash: str = ""
+    sidecar_hash: str = ""
+    depth: int | None = None
+    preferences: tuple[tuple[str, float], ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.name, str) or not self.name.strip():
+            raise ValueError("Entrant name must not be empty")
+        if self.kind not in _ENTRANT_KINDS:
+            raise ValueError(f"unknown Entrant kind {self.kind}")
+        if self.model_hash != "" and not _is_sha256(self.model_hash):
+            raise ValueError("an Entrant model hash must be a sha256")
+        if self.sidecar_hash != "" and not _is_sha256(self.sidecar_hash):
+            raise ValueError("an Entrant sidecar hash must be a sha256")
+        if self.kind == "model":
+            if not _is_sha256(self.model_hash):
+                raise ValueError("a model Entrant needs a model hash")
+        elif self.model_hash != "" or self.sidecar_hash != "":
+            raise ValueError("only a model Entrant has a model or sidecar hash")
+        if isinstance(self.search_simulations, bool) or not isinstance(
+            self.search_simulations, int
+        ):
+            raise ValueError("search_simulations must be a non-negative integer")
+        if self.search_simulations < 0:
+            raise ValueError("search_simulations must be a non-negative integer")
+        if not isinstance(self.explore, bool):
+            raise ValueError("explore must be true or false")
+        if self.kind == "alphabeta":
+            if isinstance(self.depth, bool) or not isinstance(self.depth, int) or self.depth < 1:
+                raise ValueError("alphabeta depth must be an integer of at least 1")
+        elif self.depth is not None:
+            raise ValueError("only an alphabeta Entrant has a depth")
+        object.__setattr__(self, "preferences", _validated_preferences(self.preferences))
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "name": self.name,
+            "kind": self.kind,
+            "search_simulations": self.search_simulations,
+            "explore": self.explore,
+            "model_hash": self.model_hash,
+            "sidecar_hash": self.sidecar_hash,
+            "depth": self.depth,
+            "preferences": [
+                {"category": category, "delta": delta} for category, delta in self.preferences
+            ],
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,16 +139,36 @@ class CorpusManifest:
     games_dropped: int
     drop_rate: float
     opponent: str = ""
+    league_name: str = ""
+    league_plan_sha256: str = ""
+    entrants: tuple[CorpusEntrant, ...] = ()
 
     def __post_init__(self) -> None:
         if self.player_kind not in _PLAYER_KINDS:
             raise ValueError("player_kind must be 'value', 'model', or 'mixed'")
-        if self.player_kind == "value" and self.model_sha256 != "":
+        league = bool(self.league_name or self.league_plan_sha256 or self.entrants)
+        if league:
+            if self.player_kind != "mixed":
+                raise ValueError("a league Corpus is a mixed table")
+            if (
+                not self.league_name.strip()
+                or not _is_sha256(self.league_plan_sha256)
+                or not self.entrants
+            ):
+                raise ValueError(
+                    "a league Corpus names the league, its plan hash, and its Entrants"
+                )
+            names = [entrant.name for entrant in self.entrants]
+            if len(names) != len(set(names)):
+                raise ValueError("Entrant names must be unique")
+            if self.model_sha256 != "" and not _is_sha256(self.model_sha256):
+                raise ValueError("a league model hash must be empty or a sha256")
+        elif self.player_kind == "value" and self.model_sha256 != "":
             raise ValueError("a value-function Corpus has no model hash")
-        if self.player_kind != "value" and not _is_sha256(self.model_sha256):
+        elif self.player_kind != "value" and not _is_sha256(self.model_sha256):
             raise ValueError("a model Corpus needs a sha256 of the model file")
         if self.player_kind == "mixed":
-            if self.opponent == "":
+            if self.opponent == "" and not league:
                 raise ValueError("a mixed table must name its opponent")
         elif self.opponent != "":
             raise ValueError("a self-play Corpus has no opponent")
@@ -122,6 +215,12 @@ class CorpusManifest:
             conflicts.append("player_kind")
         if self.opponent != invocation.opponent:
             conflicts.append("opponent")
+        if self.league_name != invocation.league_name:
+            conflicts.append("league_name")
+        if self.league_plan_sha256 != invocation.league_plan_sha256:
+            conflicts.append("league_plan_sha256")
+        if self.entrants != invocation.entrants:
+            conflicts.append("entrants")
         if self.model_sha256 != invocation.model_sha256:
             conflicts.append("model_sha256")
         if self.search_simulations != invocation.search_simulations:
@@ -164,6 +263,10 @@ class CorpusManifest:
         }
         if self.player_kind == "mixed":
             payload["opponent"] = self.opponent
+        if self.league_name or self.league_plan_sha256 or self.entrants:
+            payload["league_name"] = self.league_name
+            payload["league_plan_sha256"] = self.league_plan_sha256
+            payload["entrants"] = [entrant.to_dict() for entrant in self.entrants]
         return payload
 
     def to_json(self) -> str:
@@ -179,11 +282,16 @@ class CorpusManifest:
             if not isinstance(key, str):
                 raise ValueError("Corpus manifest keys must be strings")
             payload[key] = value
-        expected = set(_MIXED_FIELDS if payload.get("player_kind") == "mixed" else _FIELDS)
+        required = set(_MIXED_FIELDS if payload.get("player_kind") == "mixed" else _FIELDS)
         found = set(payload)
-        if found != expected:
-            missing = ", ".join(sorted(expected - found))
-            unknown = ", ".join(sorted(found - expected))
+        league_found = set(_LEAGUE_FIELDS) & found
+        if league_found and league_found != set(_LEAGUE_FIELDS):
+            raise ValueError("a league Corpus records its name, plan hash, and Entrants")
+        missing_keys = required - found
+        unknown_keys = found - required - set(_LEAGUE_FIELDS)
+        if missing_keys or unknown_keys:
+            missing = ", ".join(sorted(missing_keys))
+            unknown = ", ".join(sorted(unknown_keys))
             raise ValueError(
                 f"Corpus manifest fields do not match (missing: {missing}; unknown: {unknown})"
             )
@@ -212,6 +320,11 @@ class CorpusManifest:
             games_dropped=_integer(payload, "games_dropped"),
             drop_rate=_number(payload, "drop_rate"),
             opponent=_string(payload, "opponent") if player_kind == "mixed" else "",
+            league_name=_string(payload, "league_name") if "league_name" in payload else "",
+            league_plan_sha256=(
+                _string(payload, "league_plan_sha256") if "league_plan_sha256" in payload else ""
+            ),
+            entrants=_entrants(payload["entrants"]) if "entrants" in payload else (),
         )
 
 
@@ -234,6 +347,86 @@ def _ratio(games_finished: int, games_dropped: int) -> float:
     if total <= 0:
         return 0.0
     return games_dropped / total
+
+
+def _validated_preferences(
+    preferences: tuple[tuple[str, float], ...],
+) -> tuple[tuple[str, float], ...]:
+    normalized: list[tuple[str, float]] = []
+    seen: set[str] = set()
+    for category, delta in preferences:
+        if category not in _PREFERENCE_CATEGORIES:
+            raise ValueError(f"unknown Policy Preference {category}")
+        if category in seen:
+            raise ValueError(f"Policy Preference {category} is declared twice")
+        seen.add(category)
+        if isinstance(delta, bool) or not isinstance(delta, (int, float)):
+            raise ValueError("a Policy Preference delta must be a finite number")
+        if not math.isfinite(float(delta)):
+            raise ValueError("a Policy Preference delta must be a finite number")
+        normalized.append((category, float(delta)))
+    return tuple(normalized)
+
+
+def _entrants(value: object) -> tuple[CorpusEntrant, ...]:
+    if not isinstance(value, list):
+        raise ValueError("Corpus manifest field entrants must be a list")
+    return tuple(_entrant(item) for item in value)
+
+
+def _entrant(value: object) -> CorpusEntrant:
+    document = _object(value, "Entrant")
+    if set(document) != _ENTRANT_FIELDS:
+        missing = ", ".join(sorted(_ENTRANT_FIELDS - set(document)))
+        unknown = ", ".join(sorted(set(document) - _ENTRANT_FIELDS))
+        raise ValueError(f"Entrant fields do not match (missing: {missing}; unknown: {unknown})")
+    return CorpusEntrant(
+        name=_string(document, "name"),
+        kind=_string(document, "kind"),
+        search_simulations=_integer(document, "search_simulations"),
+        explore=_boolean(document, "explore"),
+        model_hash=_string(document, "model_hash"),
+        sidecar_hash=_string(document, "sidecar_hash"),
+        depth=_optional_integer(document["depth"], "depth"),
+        preferences=_preference_list(document["preferences"]),
+    )
+
+
+def _preference_list(value: object) -> tuple[tuple[str, float], ...]:
+    if not isinstance(value, list):
+        raise ValueError("Entrant preferences must be a list")
+    items: list[tuple[str, float]] = []
+    for item in value:
+        document = _object(item, "preference")
+        if set(document) != _PREFERENCE_FIELDS:
+            raise ValueError("preference fields must be category and delta")
+        category = document["category"]
+        if not isinstance(category, str):
+            raise ValueError("preference category must be a string")
+        delta = document["delta"]
+        if isinstance(delta, bool) or not isinstance(delta, (int, float)):
+            raise ValueError("a Policy Preference delta must be a finite number")
+        items.append((category, float(delta)))
+    return tuple(items)
+
+
+def _object(value: object, label: str) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
+    parsed: dict[str, object] = {}
+    for key, item in value.items():
+        if not isinstance(key, str):
+            raise ValueError(f"{label} keys must be strings")
+        parsed[key] = item
+    return parsed
+
+
+def _optional_integer(value: object, label: str) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"Entrant {label} must be an integer or null")
+    return value
 
 
 def _is_sha256(value: str) -> bool:

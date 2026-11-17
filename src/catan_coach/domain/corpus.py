@@ -95,12 +95,16 @@ def combine_corpora(parts: Sequence[Corpus]) -> Corpus:
 
 
 def split_for_game(
-    game_id: int,
+    game_id: int | str,
     *,
     seed: int,
     validation_fraction: float = DEFAULT_VALIDATION_FRACTION,
 ) -> Split:
-    """Assign a whole game to train or validation. Independent of other games."""
+    """Assign one game, or one league block, to train or validation.
+
+    The draw depends only on `seed` and `game_id`. A league passes the block
+    id, so the rotations of one board land on the same side.
+    """
     if not 0.0 < validation_fraction < 1.0:
         raise ValueError("validation_fraction must be between 0 and 1, exclusive")
     rng = random.Random(f"{seed}:{game_id}")

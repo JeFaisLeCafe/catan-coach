@@ -10,6 +10,7 @@ import pytest
 
 from catan_coach.domain.manifest import (
     MANIFEST_NAME,
+    CorpusEntrant,
     CorpusManifest,
     accepts_training,
     training_refusal,
@@ -254,6 +255,54 @@ def test_self_play_manifests_keep_their_shape_and_name_no_opponent() -> None:
     del payload["opponent"]
     with pytest.raises(ValueError, match="missing: opponent"):
         CorpusManifest.from_json(json.dumps(payload))
+
+
+def test_a_league_corpus_names_the_league_and_refuses_self_play() -> None:
+    entrants = (
+        CorpusEntrant(name="value-0", kind="value"),
+        CorpusEntrant(
+            name="generation-7", kind="model", model_hash=_MODEL_SHA, sidecar_hash="cd" * 32
+        ),
+    )
+    manifest = CorpusManifest(
+        player_kind="mixed",
+        model_sha256="",
+        search_simulations=0,
+        exploration=False,
+        ply_stride=12,
+        base_seed=200_000,
+        requested_games=4,
+        validation_fraction=0.2,
+        max_turns=1000,
+        git_revision="abc123",
+        dirty_tree=False,
+        games_finished=4,
+        games_dropped=0,
+        drop_rate=0.0,
+        league_name="tiny",
+        league_plan_sha256=_MODEL_SHA,
+        entrants=entrants,
+    )
+
+    restored = CorpusManifest.from_json(manifest.to_json())
+
+    assert restored == manifest
+    payload = json.loads(manifest.to_json())
+    assert payload["player_kind"] == "mixed"
+    assert payload["opponent"] == ""
+    assert payload["league_name"] == "tiny"
+    assert payload["league_plan_sha256"] == _MODEL_SHA
+    assert [entrant["name"] for entrant in payload["entrants"]] == ["value-0", "generation-7"]
+    assert payload["entrants"][1]["model_hash"] == _MODEL_SHA
+    assert payload["entrants"][1]["sidecar_hash"] == "cd" * 32
+    assert manifest.resume_conflicts(replace(manifest, league_name="other")) == ("league_name",)
+    claim = dict(payload)
+    claim["player_kind"] = "model"
+    claim["exploration"] = True
+    claim["model_sha256"] = _MODEL_SHA
+    del claim["opponent"]
+    with pytest.raises(ValueError, match="mixed table"):
+        CorpusManifest.from_json(json.dumps(claim))
 
 
 def test_a_self_play_claim_for_the_mixed_table_is_refused(tmp_path: Path) -> None:
