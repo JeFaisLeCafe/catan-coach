@@ -27,6 +27,8 @@ from catan_coach.domain.experiment import (
     PolicyKind,
     PolicyPreference,
     PreferenceCategory,
+    ScheduledGame,
+    SourceProvenance,
 )
 
 Entrant = FrozenPolicySpec
@@ -172,6 +174,27 @@ def schedule(plan: LeaguePlan) -> tuple[LeagueGame, ...]:
                     )
                 )
     return tuple(games)
+
+
+def scheduled_games(plan: LeaguePlan, source: SourceProvenance) -> tuple[ScheduledGame, ...]:
+    """The league schedule as Strategy Lab games, so its store and runner play them.
+
+    The game id is the result key: rotations of a block share a seed, so a
+    seed-derived key would collide. A league has no candidate; Seat 0 stands in.
+    """
+    return tuple(
+        ScheduledGame(
+            result_key=game.game_id,
+            pairing_key=game.pairing_key,
+            seed=game.seed,
+            candidate_seat=0,
+            policies=game.entrants,
+            map_policy=game.map_policy,
+            rules=game.rules,
+            source=source,
+        )
+        for game in schedule(plan)
+    )
 
 
 def _validated_entrants(value: object) -> tuple[Entrant, ...]:
