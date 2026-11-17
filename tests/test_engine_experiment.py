@@ -380,3 +380,45 @@ def test_an_assertion_is_not_recorded_as_a_game_failure(
     with pytest.raises(AssertionError, match="programmer"):
         _play_all(store, list(schedule(plan)), 1, 0.0, tmp_path)
     assert list((tmp_path / "failures").rglob("*.json")) == []
+
+
+_ALPHABETA_PROBE = """
+from catan_coach.domain.experiment import (
+    ExperimentPlan,
+    FrozenPolicySpec,
+    SourceProvenance,
+    schedule,
+)
+from catan_coach.engine.experiment import play_scheduled_game
+
+plan = ExperimentPlan(
+    name="probe",
+    candidate=FrozenPolicySpec("alphabeta", "alphabeta", depth=1),
+    opponent=FrozenPolicySpec("value", "value"),
+    games_per_candidate_seat=1,
+    base_seed=900000,
+    source=SourceProvenance("e" * 40, False),
+)
+for game in schedule(plan)[:2]:
+    result = play_scheduled_game(game)
+    print(result.plies, result.turns, result.winner)
+"""
+
+
+def test_an_alphabeta_game_replays_identically_in_any_process() -> None:
+    import os
+    import subprocess
+    import sys
+
+    outputs = set()
+    for hash_seed in ("1", "2", "3"):
+        completed = subprocess.run(
+            [sys.executable, "-c", _ALPHABETA_PROBE],
+            check=False,
+            capture_output=True,
+            text=True,
+            env={**os.environ, "PYTHONHASHSEED": hash_seed},
+        )
+        assert completed.returncode == 0, completed.stderr
+        outputs.add(completed.stdout)
+    assert len(outputs) == 1
