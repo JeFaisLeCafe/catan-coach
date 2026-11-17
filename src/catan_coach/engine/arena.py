@@ -3,6 +3,7 @@
 A league directory holds ``league.json`` (the frozen plan and source
 provenance) beside the same ``games/`` and ``failures/`` folders a Strategy
 Experiment writes. Each game file is named by its game id.
+``report_league`` summarizes that directory without replaying games.
 """
 
 from __future__ import annotations
@@ -12,9 +13,14 @@ import json
 from pathlib import Path
 
 from catan_coach.domain.experiment import SourceProvenance
-from catan_coach.domain.league import LeaguePlan, scheduled_games
+from catan_coach.domain.league import LeaguePlan, schedule, scheduled_games
+from catan_coach.domain.league_report import (
+    format_league_report,
+    league_report_to_json,
+    summarize_league,
+)
 from catan_coach.engine.experiment_store import GameStore, PlanMismatch
-from catan_coach.engine.lab import DirtyWorktree, play_store, source_provenance
+from catan_coach.engine.lab import DirtyWorktree, _atomic, play_store, source_provenance
 
 LEAGUE_SCHEMA = 1
 LEAGUE_FILE = "league.json"
@@ -60,6 +66,33 @@ def load_league(path: Path) -> LeaguePlan:
     if isinstance(entrants, list):
         document["entrants"] = [_pinned(item, path.parent) for item in entrants]
     return LeaguePlan.from_json(document)
+
+
+def report_league(out: Path, *, json_path: Path | None, markdown_path: Path | None) -> int:
+    """Print the league report, and write the JSON and Markdown when asked.
+
+    The JSON is ``league_report_to_json`` with sorted keys, indent 2, and a
+    trailing newline. The Markdown is ``format_league_report`` of that same
+    report. Both writes are atomic.
+    """
+    if not (out / LEAGUE_FILE).is_file():
+        raise ValueError(f"no league at {out}")
+    store = LeagueStore.load(out)
+    report = summarize_league(
+        store.plan,
+        store.source,
+        schedule(store.plan),
+        store.read_outcomes(),
+        store.read_failures(),
+    )
+    text = format_league_report(report)
+    if json_path is not None:
+        payload = json.dumps(league_report_to_json(report), sort_keys=True, indent=2) + "\n"
+        _atomic(json_path, payload)
+    if markdown_path is not None:
+        _atomic(markdown_path, text)
+    print(text, end="")
+    return 0
 
 
 def run_league(plan_path: Path, out: Path, *, workers: int, allow_dirty: bool) -> int:
@@ -112,5 +145,6 @@ __all__ = [
     "LeagueStore",
     "PlanMismatch",
     "load_league",
+    "report_league",
     "run_league",
 ]

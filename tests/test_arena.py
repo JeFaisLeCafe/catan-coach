@@ -151,3 +151,48 @@ def test_an_interrupted_league_resumes_to_an_identical_store(tmp_path: Path) -> 
     assert sorted(p.relative_to(resumed) for p in resumed.rglob("*")) == sorted(
         p.relative_to(whole) for p in whole.rglob("*")
     )
+
+
+def _report(out: Path, json_path: Path, markdown_path: Path) -> int:
+    from catan_coach.cli import main
+
+    return main(
+        [
+            "arena",
+            "report",
+            str(out),
+            "--json",
+            str(json_path),
+            "--markdown",
+            str(markdown_path),
+        ]
+    )
+
+
+@pytest.mark.engine
+def test_arena_report_regenerates_byte_for_byte(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    plan_path = _write_plan(tmp_path / "plan.json")
+    out = tmp_path / "out"
+    assert _run(plan_path, out) == 0
+    capsys.readouterr()
+    first_json = tmp_path / "first.json"
+    first_markdown = tmp_path / "first.md"
+    second_json = tmp_path / "second.json"
+    second_markdown = tmp_path / "second.md"
+    assert _report(out, first_json, first_markdown) == 0
+    assert _report(out, second_json, second_markdown) == 0
+    assert first_json.read_bytes() == second_json.read_bytes()
+    assert first_markdown.read_bytes() == second_markdown.read_bytes()
+    document = json.loads(first_json.read_text(encoding="utf-8"))
+    rendered = json.dumps(document, sort_keys=True, indent=2) + "\n"
+    assert first_json.read_text(encoding="utf-8") == rendered
+    markdown = first_markdown.read_text(encoding="utf-8")
+    assert markdown.endswith("\n")
+    assert capsys.readouterr().out == markdown + markdown
+    assert document["schema"] == 1
+    assert document["provenance"]["bootstrap_replicates"] == 10_000
+    assert document["attrition"]["scheduled"] == 4
+    assert document["attrition"]["completed"] == 4
+    assert len(document["ladder"]) == 4

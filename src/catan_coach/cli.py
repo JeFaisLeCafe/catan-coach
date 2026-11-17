@@ -194,13 +194,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     lab_compare.add_argument("--json", type=Path)
     lab_compare.add_argument("--markdown", type=Path)
 
-    arena_parser = subparsers.add_parser(_ARENA, help="run an Arena league")
+    arena_parser = subparsers.add_parser(_ARENA, help="run or report an Arena league")
     arena_commands = arena_parser.add_subparsers(dest="arena_command", required=True)
     arena_run = arena_commands.add_parser("run", help="play or resume a league plan")
     arena_run.add_argument("plan", type=Path)
     arena_run.add_argument("--out", type=Path, required=True)
     arena_run.add_argument("--workers", type=int, default=1)
     arena_run.add_argument("--allow-dirty", action="store_true")
+    arena_report = arena_commands.add_parser("report", help="summarize a league directory")
+    arena_report.add_argument("league", type=Path)
+    arena_report.add_argument("--json", type=Path)
+    arena_report.add_argument("--markdown", type=Path)
     args = parser.parse_args(args_list)
     if args.command == _ARENA:
         return _run_arena(args)
@@ -243,10 +247,12 @@ def _run_lab(args: argparse.Namespace) -> int:
 
 
 def _run_arena(args: argparse.Namespace) -> int:
-    # Lazy: the engine and its pool load only when a league runs.
-    from catan_coach.engine.arena import DirtyWorktree, PlanMismatch, run_league
+    # Lazy: the engine and its pool load only when an arena command runs.
+    from catan_coach.engine.arena import DirtyWorktree, PlanMismatch, report_league, run_league
 
     try:
+        if args.arena_command == "report":
+            return report_league(args.league, json_path=args.json, markdown_path=args.markdown)
         return run_league(args.plan, args.out, workers=args.workers, allow_dirty=args.allow_dirty)
     except (DirtyWorktree, PlanMismatch, ValueError) as error:
         print(error, file=sys.stderr)
